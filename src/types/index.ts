@@ -17,17 +17,19 @@ export interface UserHealthInfo {
   medicalConditions?: string[];
 }
 
-// 영양 성분 데이터 타입
+// 영양 성분 데이터 타입 (Recharts PieChart 호환)
 export interface NutrientData {
   name: string;
   value: number;
   color: string;
+  [key: string]: string | number; // Recharts 호환성
 }
 
-// 칼로리 섭취 데이터 타입
+// 칼로리 섭취 데이터 타입 (Recharts BarChart 호환)
 export interface CalorieData {
   name: string;
   value: number;
+  [key: string]: string | number; // Recharts 호환성
 }
 
 // 추천 음식 타입
@@ -77,4 +79,23 @@ export interface ApiResponse<T> {
   data?: T;
   message?: string;
   error?: string;
+}
+
+// Recharts Tooltip Props 타입
+export interface ChartTooltipProps {
+  active?: boolean;
+  payload?: Array<{ value: number; name: string }>;
+  label?: string;
+}
+
+// Recharts PieChart CustomizedLabel Props 타입
+export interface PieLabelProps {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  innerRadius: number;
+  outerRadius: number;
+  value: number;
+  percent?: number;
+  index?: number;
 }

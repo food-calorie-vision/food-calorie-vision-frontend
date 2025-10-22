@@ -1,6 +1,6 @@
 'use client';
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Apple } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NutrientData, UserIntakeData } from '@/types';
@@ -25,8 +25,8 @@ const NutrientRatioChart = () => {
         ];
         
         setData(chartData);
-      } catch (error) {
-        console.error('섭취 데이터를 가져오는데 실패했습니다:', error);
+      } catch (_error) {
+        console.error('섭취 데이터를 가져오는데 실패했습니다:', _error);
         // 에러 시 기본 데이터 사용
         setData([
           { name: '나트륨', value: 1200, color: '#ef4444' },
@@ -43,6 +43,7 @@ const NutrientRatioChart = () => {
     fetchIntakeData();
   }, []);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) => {
     const RADIAN = Math.PI / 180;
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;

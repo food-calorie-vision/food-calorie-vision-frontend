@@ -18,7 +18,7 @@ export async function GET() {
     };
 
     return NextResponse.json(intakeData);
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { error: '섭취 현황을 가져오는데 실패했습니다.' },
       { status: 500 }

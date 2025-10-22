@@ -22,8 +22,8 @@ const CalorieIntakeChart = () => {
         ];
         
         setData(chartData);
-      } catch (error) {
-        console.error('섭취 데이터를 가져오는데 실패했습니다:', error);
+      } catch (_error) {
+        console.error('섭취 데이터를 가져오는데 실패했습니다:', _error);
         // 에러 시 기본 데이터 사용
         setData([
           { name: '섭취', value: 1850 },
@@ -37,6 +37,7 @@ const CalorieIntakeChart = () => {
     fetchIntakeData();
   }, []);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
