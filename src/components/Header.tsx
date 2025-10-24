@@ -10,11 +10,12 @@ const Header = () => {
   const [userName, setUserName] = useState('');
 
   const navItems = [
+    { name: '오늘의 식사 일기', href: '/food-image-analysis' },
+    { name: '레시피 검색', href: '/recipe' },
+    { name: '추천 식단', href: '/recommended-meals' },
     { name: '대시보드', href: '/dashboard' },
-    { name: '맞춤식단', href: '/customized-diet' },
-    { name: '식사일기', href: '/health-report' },
-    { name: '레시피검색', href: '/recipe' },
     { name: '마이페이지', href: '/mypage' },
+    { name: '고객센터/문의', href: '/support' },
   ];
 
   const handleLogout = () => {
@@ -34,24 +35,22 @@ const Header = () => {
             <span className="text-xl font-bold text-gray-900">KCalculator</span>
           </Link>
 
-          {/* 네비게이션 링크 (로그인 후에만) */}
-          {isLoggedIn && (
-            <nav className="hidden md:flex space-x-8">
-              {navItems.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`text-sm font-medium transition-colors ${
-                    pathname === item.href
-                      ? 'text-green-600 border-b-2 border-green-600'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {item.name}
-                </Link>
-              ))}
-            </nav>
-          )}
+          {/* 네비게이션 링크 */}
+          <nav className="hidden md:flex space-x-8">
+            {navItems.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`text-sm font-medium transition-colors ${
+                  pathname === item.href
+                    ? 'text-green-600 border-b-2 border-green-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {item.name}
+              </Link>
+            ))}
+          </nav>
 
           {/* 로그인/회원가입 또는 사용자 정보 */}
           <div className="flex items-center space-x-4">

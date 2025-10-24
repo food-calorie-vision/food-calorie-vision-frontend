@@ -99,3 +99,68 @@ export interface PieLabelProps {
   percent?: number;
   index?: number;
 }
+
+// 점수 데이터 타입
+export interface ScoreData {
+  todayScore: number;
+  previousScore: number;
+  scoreChange: number;
+  feedback: string;
+  improvement: string;
+}
+
+// 자주 먹는 음식 타입
+export interface FrequentFood {
+  id: number;
+  name: string;
+  calories: number;
+  nutrients: {
+    carbs: number;
+    protein: number;
+    fat: number;
+  };
+}
+
+// 일일 칼로리 데이터 타입
+export interface DailyCalorieData {
+  date: string;
+  calories: number;
+}
+
+// 챗봇 메시지 타입
+export interface ChatMessage {
+  id: string;
+  type: 'user' | 'bot';
+  content: string;
+  timestamp: Date;
+  imageUrl?: string;
+}
+
+// 식단 추천 타입
+export interface MealRecommendation {
+  id: number;
+  name: string;
+  calories: number;
+  description: string;
+  isSelected: boolean;
+  nutrients?: {
+    protein: number;
+    carbs: number;
+    fat: number;
+    sodium: number;
+  };
+}
+
+// 음식 이미지 분석 결과 타입
+export interface FoodAnalysisResult {
+  foodName: string;
+  calories: number;
+  nutrients: {
+    protein: number;
+    carbs: number;
+    fat: number;
+    sodium: number;
+  };
+  confidence: number;
+  suggestions: string[];
+}

@@ -1,41 +1,46 @@
 import Header from '@/components/Header';
-import NutrientRatioChart from '@/components/NutrientRatioChart';
-import HealthStatus from '@/components/HealthStatus';
-import CalorieIntakeChart from '@/components/CalorieIntakeChart';
-import RecommendedDiet from '@/components/RecommendedDiet';
+import MyScore from '@/components/MyScore';
+import DailyCalorieChart from '@/components/DailyCalorieChart';
+import FrequentFoodsList from '@/components/FrequentFoodsList';
+import FloatingActionButtons from '@/components/FloatingActionButtons';
 
 export const metadata = {
-  title: 'KCalculator - 대시보드',
-  description: '일일 칼로리 및 영양 정보 대시보드',
+  title: 'KCalculator - MY PAGE',
+  description: '개인 맞춤 건강 관리 대시보드',
 };
 
 export default function Dashboard() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <Header />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* 페이지 제목 */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">대시보드</h1>
-          <p className="text-gray-600">당신의 건강 정보와 식단 현황을 한눈에 확인하세요</p>
+          <h1 className="text-4xl font-bold text-gray-900">MY PAGE</h1>
         </div>
 
-        {/* 상단 섹션: 영양 성분 비율과 건강 상태 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <NutrientRatioChart />
-          <HealthStatus />
+        {/* 메인 콘텐츠 그리드 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* 좌측: MY SCORE */}
+          <div className="lg:col-span-1">
+            <MyScore />
+          </div>
+          
+          {/* 중앙: 일일 칼로리 섭취량 */}
+          <div className="lg:col-span-2">
+            <DailyCalorieChart />
+          </div>
         </div>
         
-        {/* 중간 섹션: 칼로리 섭취 현황 */}
-        <div className="mb-8">
-          <CalorieIntakeChart />
-        </div>
-        
-        {/* 하단 섹션: 추천 식단 */}
-        <div>
-          <RecommendedDiet />
+        {/* 하단: 자주 먹는 음식 리스트 */}
+        <div className="mt-8">
+          <FrequentFoodsList />
         </div>
       </main>
+      
+      {/* 우측 플로팅 액션 버튼 */}
+      <FloatingActionButtons />
     </div>
   );
 }
