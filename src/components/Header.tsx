@@ -12,7 +12,7 @@ const Header = () => {
   const navItems = [
     { name: '대시보드', href: '/dashboard' },
     { name: '맞춤식단', href: '/customized-diet' },
-    { name: '식사일기', href: '/health-report' },
+    { name: '오늘의 식사 일기', href: '/meal-diary' },
     { name: '레시피검색', href: '/recipe' },
     { name: '마이페이지', href: '/mypage' },
   ];

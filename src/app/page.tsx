@@ -82,8 +82,8 @@ export default function Home() {
                 <Link href="/customized-diet" className="text-slate-600 hover:text-slate-900 transition font-medium">
                   맞춤식단
                 </Link>
-                <Link href="/health-report" className="text-slate-600 hover:text-slate-900 transition font-medium">
-                  식사일기
+                <Link href="/meal-diary" className="text-slate-600 hover:text-slate-900 transition font-medium">
+                  오늘의 식사 일기
                 </Link>
                 <Link href="/recipe" className="text-slate-600 hover:text-slate-900 transition font-medium">
                   레시피 검색
