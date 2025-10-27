@@ -88,6 +88,9 @@ export default function Home() {
                 <Link href="/recipe" className="text-slate-600 hover:text-slate-900 transition font-medium">
                   레시피 검색
                 </Link>
+                <Link href="/recommend" className="text-slate-600 hover:text-slate-900 transition font-medium">
+                  레시피 / 식단추천
+                </Link>
                 <Link href="/mypage" className="text-slate-600 hover:text-slate-900 transition font-medium">
                   마이페이지
                 </Link>
