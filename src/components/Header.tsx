@@ -14,10 +14,8 @@ const Header = ({ isLoggedIn, userName, handleLogout }: HeaderProps) => {
 
   const navItems = [
     { name: '오늘의 식사 일기', href: '/meal-diary/analysis' },
-    { name: '레시피 검색', href: '/recipe' },
-    { name: '추천 식단', href: '/recommended-meals' },
+    { name: '레시피/식단추천', href: '/recommend' },
     { name: '대시보드', href: '/dashboard' },
-    { name: '맞춤식단', href: '/customized-diet' },
     { name: '문의하기', href: '/contact' },
   ];
 

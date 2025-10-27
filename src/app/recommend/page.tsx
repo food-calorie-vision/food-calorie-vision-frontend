@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
-import Link from "next/link";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Header from "@/components/Header";
 
 type ChatMessage = { role: "bot" | "user"; text: string };
 
@@ -15,6 +16,42 @@ const INITIAL_BOT_MESSAGE: ChatMessage = {
 };
 
 export default function RecommendPage() {
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // 로그인 상태 확인 및 인증 체크
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const expire = sessionStorage.getItem("login_expire");
+      const user = sessionStorage.getItem("user_name");
+
+      // 세션이 있고 만료되지 않았으면 로그인 상태 유지
+      if (expire && Date.now() < Number(expire)) {
+        setIsLoggedIn(true);
+        setUserName(user || "");
+      } else {
+        // 세션이 없거나 만료되었으면 메인 페이지로 리다이렉트
+        alert("로그인이 필요합니다.");
+        router.push("/");
+      }
+      setIsCheckingAuth(false);
+    }
+  }, [router]);
+
+  // 로그아웃 처리
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserName("");
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("login_expire");
+      sessionStorage.removeItem("user_name");
+      alert("로그아웃되었습니다.");
+      router.push("/");
+    }
+  };
+
   // 상단 탭 상태: 레시피 추천 / 식단 추천
   const [mainTab, setMainTab] = useState<"recipe" | "diet">("recipe");
 
@@ -140,43 +177,26 @@ export default function RecommendPage() {
     },
   ];
 
+  // 인증 체크 중이면 로딩 화면 표시
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white pb-16">
       {/* 헤더 */}
-      <header className="bg-white shadow-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          {/* 왼쪽 로고/타이틀 */}
-          <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="flex items-center gap-2 hover:opacity-80 transition"
-            >
-              <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center text-white font-bold">
-                K
-              </div>
-              <span className="text-xl font-bold text-slate-800">
-                KCalculator
-              </span>
-            </Link>
-
-            <span className="text-slate-400">|</span>
-
-            <h1 className="text-lg font-semibold text-slate-700">
-              레시피 / 식단 추천
-            </h1>
-          </div>
-
-          {/* 오른쪽 유저 상태 */}
-          <div className="flex items-center gap-4">
-            <span className="hidden sm:inline text-sm text-slate-600">
-              환영합니다! (user님)
-            </span>
-            <button className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors">
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header
+        isLoggedIn={isLoggedIn}
+        userName={userName}
+        handleLogout={handleLogout}
+      />
 
       {/* 상단 탭 버튼 */}
       <section className="max-w-7xl mx-auto px-4 py-6">
