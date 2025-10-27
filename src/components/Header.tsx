@@ -15,6 +15,7 @@ const Header = () => {
     { name: '식사일기', href: '/health-report' },
     { name: '레시피검색', href: '/recipe' },
     { name: '마이페이지', href: '/mypage' },
+    { name: '문의하기', href: '/contact' },
   ];
 
   const handleLogout = () => {
