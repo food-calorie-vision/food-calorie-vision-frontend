@@ -91,6 +91,9 @@ export default function Home() {
                 <Link href="/mypage" className="text-slate-600 hover:text-slate-900 transition font-medium">
                   마이페이지
                 </Link>
+                <Link href="/contact" className="text-slate-600 hover:text-slate-900 transition font-medium">
+                  문의사항
+                </Link>
               </div>
             )}
           </div>
