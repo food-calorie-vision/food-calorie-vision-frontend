@@ -1,8 +1,9 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { ReactNode, useMemo } from 'react';
+import { ReactNode, useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
+import Header from '@/components/Header';
 
 interface MealDiaryLayoutProps {
   children: ReactNode;
@@ -11,6 +12,32 @@ interface MealDiaryLayoutProps {
 export default function MealDiaryLayout({ children }: MealDiaryLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
+  
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const expire = sessionStorage.getItem('login_expire');
+      const user = sessionStorage.getItem('user_name');
+      
+      if (expire && Date.now() < Number(expire)) {
+        setIsLoggedIn(true);
+        setUserName(user || '');
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserName('');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('login_expire');
+      sessionStorage.removeItem('user_name');
+      alert('로그아웃되었습니다.');
+      router.push('/');
+    }
+  };
 
   // 현재 경로에 따라 activeTab 자동 설정
   const activeTab = useMemo(() => {
@@ -27,27 +54,7 @@ export default function MealDiaryLayout({ children }: MealDiaryLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition">
-              <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center text-white font-bold">
-                K
-              </div>
-              <span className="text-xl font-bold text-slate-800">KCalculator</span>
-            </Link>
-            <span className="text-slate-400">|</span>
-            <h1 className="text-lg font-semibold text-slate-700">오늘의 식사 일기</h1>
-          </div>
-          <Link
-            href="/"
-            className="text-sm text-slate-600 hover:text-slate-900 underline-offset-4 hover:underline"
-          >
-            홈으로
-          </Link>
-        </div>
-      </header>
+      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
 
       {/* Tab Navigation */}
       <div className="max-w-7xl mx-auto px-4 py-6">

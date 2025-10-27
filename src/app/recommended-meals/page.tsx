@@ -1,12 +1,39 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import ChatInterface from '@/components/ChatInterface';
 import { MealRecommendation } from '@/types';
 
 export default function RecommendedMealsPage() {
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState('');
   const [selectedMeal, setSelectedMeal] = useState<MealRecommendation | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const expire = sessionStorage.getItem('login_expire');
+      const user = sessionStorage.getItem('user_name');
+      
+      if (expire && Date.now() < Number(expire)) {
+        setIsLoggedIn(true);
+        setUserName(user || '');
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserName('');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('login_expire');
+      sessionStorage.removeItem('user_name');
+      alert('로그아웃되었습니다.');
+      router.push('/');
+    }
+  };
   const [mealRecommendations] = useState<MealRecommendation[]>([
     {
       id: 1,
@@ -79,7 +106,7 @@ export default function RecommendedMealsPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Header />
+      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">추천 식단</h1>

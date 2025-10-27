@@ -1,18 +1,43 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import MyScore from '@/components/MyScore';
 import DailyCalorieChart from '@/components/DailyCalorieChart';
 import FrequentFoodsList from '@/components/FrequentFoodsList';
 import FloatingActionButtons from '@/components/FloatingActionButtons';
 
-export const metadata = {
-  title: 'KCalculator - MY PAGE',
-  description: '개인 맞춤 건강 관리 대시보드',
-};
-
 export default function Dashboard() {
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const expire = sessionStorage.getItem('login_expire');
+      const user = sessionStorage.getItem('user_name');
+      
+      if (expire && Date.now() < Number(expire)) {
+        setIsLoggedIn(true);
+        setUserName(user || '');
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserName('');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('login_expire');
+      sessionStorage.removeItem('user_name');
+      alert('로그아웃되었습니다.');
+      router.push('/');
+    }
+  };
   return (
     <div className="min-h-screen bg-white">
-      <Header />
+      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* 페이지 제목 */}

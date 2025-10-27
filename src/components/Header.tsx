@@ -2,29 +2,24 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
 
-const Header = () => {
+interface HeaderProps {
+  isLoggedIn: boolean;
+  userName: string;
+  handleLogout: () => void;
+}
+
+const Header = ({ isLoggedIn, userName, handleLogout }: HeaderProps) => {
   const pathname = usePathname();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
 
   const navItems = [
-    { name: '오늘의 식사 일기', href: '/food-image-analysis' },
+    { name: '오늘의 식사 일기', href: '/meal-diary/analysis' },
     { name: '레시피 검색', href: '/recipe' },
     { name: '추천 식단', href: '/recommended-meals' },
     { name: '대시보드', href: '/dashboard' },
     { name: '맞춤식단', href: '/customized-diet' },
-    { name: '오늘의 식사 일기', href: '/meal-diary' },
-    { name: '레시피검색', href: '/recipe' },
-    { name: '마이페이지', href: '/mypage' },
     { name: '문의하기', href: '/contact' },
   ];
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
-  };
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
@@ -38,29 +33,31 @@ const Header = () => {
             <span className="text-xl font-bold text-gray-900">KCalculator</span>
           </Link>
 
-          {/* 네비게이션 링크 */}
-          <nav className="hidden md:flex space-x-8">
-            {navItems.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`text-sm font-medium transition-colors ${
-                  pathname === item.href
-                    ? 'text-green-600 border-b-2 border-green-600'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {item.name}
-              </Link>
-            ))}
-          </nav>
+          {/* 네비게이션 링크 - 로그인 시에만 표시 */}
+          {isLoggedIn && (
+            <nav className="hidden md:flex space-x-8">
+              {navItems.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`text-sm font-medium transition-colors ${
+                    pathname === item.href
+                      ? 'text-green-600 border-b-2 border-green-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {item.name}
+                </Link>
+              ))}
+            </nav>
+          )}
 
           {/* 로그인/회원가입 또는 사용자 정보 */}
           <div className="flex items-center space-x-4">
             {isLoggedIn ? (
               <>
                 <span className="text-sm font-medium text-gray-700">
-                  {userName}님
+                  {userName}님 어서오세요
                 </span>
                 <button
                   onClick={handleLogout}

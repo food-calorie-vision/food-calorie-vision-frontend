@@ -1,29 +1,93 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
+import Header from '../components/Header';
 
-export default function Home() {
-  const [id, setId] = useState('');
-  const [password, setPassword] = useState('');
+// 로그인 상태를 공유할 Context
+const AuthContext = createContext<{
+  isLoggedIn: boolean;
+  userName: string;
+  handleLogin: (id: string, password: string) => void;
+  handleLogout: () => void;
+}>({
+  isLoggedIn: false,
+  userName: '',
+  handleLogin: () => {},
+  handleLogout: () => {},
+});
+
+function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState('');
 
-  // 로그인 처리
-  const handleLogin = () => {
-    if (id && password) {
+  // 페이지 로드 시 세션 확인
+  useEffect(() => {
+    const expire = sessionStorage.getItem('login_expire');
+    const user = sessionStorage.getItem('user_name');
+    
+    if (expire && Date.now() < Number(expire)) {
       setIsLoggedIn(true);
+      setUserName(user || '');
+    }
+  }, []);
+
+  // 로그인 처리 (admin / admin)
+  const handleLogin = (id: string, password: string) => {
+    if (id === 'admin' && password === 'admin') {
+      const expireTime = Date.now() + 5 * 60 * 1000; // 5분
+      sessionStorage.setItem('login_expire', expireTime.toString());
+      sessionStorage.setItem('user_name', id);
+      setIsLoggedIn(true);
+      setUserName(id);
       alert('로그인 성공!');
     } else {
-      alert('아이디와 비밀번호를 입력해주세요.');
+      alert('사용자 정보가 올바르지 않습니다');
     }
   };
 
   // 로그아웃 처리
   const handleLogout = () => {
     setIsLoggedIn(false);
-    setId('');
-    setPassword('');
+    setUserName('');
+    sessionStorage.removeItem('login_expire');
+    sessionStorage.removeItem('user_name');
     alert('로그아웃되었습니다.');
+  };
+
+  return (
+    <AuthContext.Provider value={{ isLoggedIn, userName, handleLogin, handleLogout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export default function Home() {
+  const [id, setId] = useState('');
+  const [password, setPassword] = useState('');
+
+  return (
+    <AuthProvider>
+      <HomeContent id={id} setId={setId} password={password} setPassword={setPassword} />
+    </AuthProvider>
+  );
+}
+
+function HomeContent({
+  id,
+  setId,
+  password,
+  setPassword,
+}: {
+  id: string;
+  setId: (v: string) => void;
+  password: string;
+  setPassword: (v: string) => void;
+}) {
+  const { isLoggedIn, userName, handleLogin, handleLogout } = useContext(AuthContext);
+
+  const onLoginClick = () => {
+    handleLogin(id, password);
   };
 
   const features = [
@@ -61,71 +125,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      {/* 네비게이션 */}
-      <nav className="bg-white shadow-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            {/* KCalculator 로고 - 클릭시 홈으로 이동 */}
-            <Link href="/" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition">
-              <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center text-white font-bold">
-                K
-              </div>
-              <span className="text-xl font-bold text-slate-800">KCalculator</span>
-            </Link>
-
-            {/* 로그인 후에만 메뉴 표시 */}
-            {isLoggedIn && (
-              <div className="hidden md:flex items-center gap-6 text-sm">
-                <Link href="/dashboard" className="text-slate-600 hover:text-slate-900 transition font-medium">
-                  대시보드
-                </Link>
-                <Link href="/customized-diet" className="text-slate-600 hover:text-slate-900 transition font-medium">
-                  맞춤식단
-                </Link>
-                <Link href="/meal-diary/analysis" className="text-slate-600 hover:text-slate-900 transition font-medium">
-                  오늘의 식사 일기
-                </Link>
-                <Link href="/recipe" className="text-slate-600 hover:text-slate-900 transition font-medium">
-                  레시피 검색
-                </Link>
-                <Link href="/recommend" className="text-slate-600 hover:text-slate-900 transition font-medium">
-                  레시피 / 식단추천
-                </Link>
-                <Link href="/mypage" className="text-slate-600 hover:text-slate-900 transition font-medium">
-                  마이페이지
-                </Link>
-                <Link href="/contact" className="text-slate-600 hover:text-slate-900 transition font-medium">
-                  문의사항
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {/* 로그인 상태에 따른 버튼 표시 */}
-          <div className="flex items-center gap-3">
-            {isLoggedIn ? (
-              <>
-                <span className="text-slate-700 font-medium">환영합니다, {id}님!</span>
-                <button
-                  onClick={handleLogout}
-                  className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-medium"
-                >
-                  로그아웃
-                </button>
-              </>
-            ) : (
-              <>
-                <button className="px-6 py-2 border border-green-500 text-green-600 rounded-lg hover:bg-green-50 transition font-medium">
-                  로그인
-                </button>
-                <button className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium">
-                  회원가입
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </nav>
+      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
 
       {/* 메인 섹션 */}
       <section className="max-w-7xl mx-auto px-4 py-16 md:py-24">
@@ -156,7 +156,7 @@ export default function Home() {
               </div>
 
               <button
-                onClick={handleLogin}
+                onClick={onLoginClick}
                 className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition"
               >
                 로그인

@@ -1,17 +1,45 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Upload, Search, Image as ImageIcon, X, Loader2 } from 'lucide-react';
 import Header from '@/components/Header';
 import { FoodAnalysisResult } from '@/types';
 
 export default function FoodImageAnalysisPage() {
+  const router = useRouter();
   const [uploadedImage, setUploadedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<FoodAnalysisResult | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const expire = sessionStorage.getItem('login_expire');
+      const user = sessionStorage.getItem('user_name');
+      
+      if (expire && Date.now() < Number(expire)) {
+        setIsLoggedIn(true);
+        setUserName(user || '');
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserName('');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('login_expire');
+      sessionStorage.removeItem('user_name');
+      alert('로그아웃되었습니다.');
+      router.push('/');
+    }
+  };
 
   // 이미지 업로드 처리
   const handleImageUpload = (file: File) => {
@@ -120,7 +148,7 @@ export default function FoodImageAnalysisPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Header />
+      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
       
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* 페이지 헤더 */}

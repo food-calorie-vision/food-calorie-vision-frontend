@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Award, TrendingUp, TrendingDown, Target } from 'lucide-react';
 import Link from 'next/link';
 import Header from '@/components/Header';
@@ -23,8 +24,34 @@ interface ScoreDetail {
 }
 
 export default function ScoreDetailPage() {
+  const router = useRouter();
   const [scoreDetail, setScoreDetail] = useState<ScoreDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const expire = sessionStorage.getItem('login_expire');
+      const user = sessionStorage.getItem('user_name');
+      
+      if (expire && Date.now() < Number(expire)) {
+        setIsLoggedIn(true);
+        setUserName(user || '');
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserName('');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('login_expire');
+      sessionStorage.removeItem('user_name');
+      alert('로그아웃되었습니다.');
+      router.push('/');
+    }
+  };
 
   useEffect(() => {
     const fetchScoreDetail = async () => {
@@ -100,7 +127,7 @@ export default function ScoreDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-white">
-        <Header />
+        <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded mb-8"></div>
@@ -115,7 +142,7 @@ export default function ScoreDetailPage() {
   if (!scoreDetail) {
     return (
       <div className="min-h-screen bg-white">
-        <Header />
+        <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
         <div className="max-w-4xl mx-auto px-4 py-8">
           <p className="text-gray-500">점수 데이터를 불러올 수 없습니다.</p>
         </div>
@@ -125,7 +152,7 @@ export default function ScoreDetailPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header />
+      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
       
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* 뒤로가기 버튼 */}

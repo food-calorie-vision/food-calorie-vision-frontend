@@ -1,4 +1,6 @@
 "use client";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import styles from './contact.module.css';
 import Link from 'next/link';
@@ -14,6 +16,32 @@ function MailIcon() {
 }
 
 export default function ContactPage() {
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const expire = sessionStorage.getItem('login_expire');
+      const user = sessionStorage.getItem('user_name');
+      
+      if (expire && Date.now() < Number(expire)) {
+        setIsLoggedIn(true);
+        setUserName(user || '');
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserName('');
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('login_expire');
+      sessionStorage.removeItem('user_name');
+      alert('로그아웃되었습니다.');
+      router.push('/');
+    }
+  };
   // 더 많은 공지 샘플
   const notices = [
     { id: 1, date: '10.24', title: '업데이트 안내' },
@@ -34,7 +62,7 @@ export default function ContactPage() {
   ];
   return (
     <>
-      <Header />
+      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
       <div className={styles.pageWrap}>
         {/* 왼쪽: 공지사항  */}
         <section className={styles.noticeSection}>
