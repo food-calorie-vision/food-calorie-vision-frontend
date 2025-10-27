@@ -96,13 +96,7 @@ const FloatingActionButtons = () => {
         <Plus className="w-6 h-6" />
       </button>
 
-      {/* 배경 오버레이 (클릭 시 닫기) */}
-      {isExpanded && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-20 -z-10"
-          onClick={() => setIsExpanded(false)}
-        />
-      )}
+      {/* 배경 오버레이 제거 - 대시보드가 보이도록 함 */}
     </div>
   );
 };
