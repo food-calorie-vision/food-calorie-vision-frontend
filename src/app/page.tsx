@@ -82,7 +82,7 @@ export default function Home() {
                 <Link href="/customized-diet" className="text-slate-600 hover:text-slate-900 transition font-medium">
                   맞춤식단
                 </Link>
-                <Link href="/meal-diary" className="text-slate-600 hover:text-slate-900 transition font-medium">
+                <Link href="/meal-diary/analysis" className="text-slate-600 hover:text-slate-900 transition font-medium">
                   오늘의 식사 일기
                 </Link>
                 <Link href="/recipe" className="text-slate-600 hover:text-slate-900 transition font-medium">
