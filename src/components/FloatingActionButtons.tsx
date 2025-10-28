@@ -26,14 +26,14 @@ const FloatingActionButtons = () => {
       id: 'recipe_recommend',
       icon: BookOpen,
       label: '레시피 추천',
-      href: '/recommend',
+      href: 'recommend?tab=recipe',
       color: 'bg-orange-500 hover:bg-orange-600'
     },
     {
       id: 'diet_recommend',
       icon: Utensils,
       label: '식단 추천',
-      href: '/recommend',
+      href: 'recommend?tab=diet',
       color: 'bg-purple-500 hover:bg-purple-600'
     },
     {

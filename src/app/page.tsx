@@ -194,14 +194,14 @@ function HomeContent({
               </div>
             </>
           ) : (
-            // 로그인 후: 텍스트가 가운데 위치
+            // 로그인 후: 이미지 표시
             <div className="md:col-span-2 flex justify-center">
-              <div className="relative w-full max-w-4xl h-80 bg-gradient-to-br from-green-100 to-blue-100 rounded-3xl flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-6xl mb-4">🏃‍♂️</div>
-                  <p className="text-slate-600 font-semibold">건강한 식단으로</p>
-                  <p className="text-slate-600 font-semibold">더 나은 내일을 만들어보세요</p>
-                </div>
+              <div className="relative w-full max-w-4xl rounded-3xl overflow-hidden shadow-2xl border border-slate-200">
+                <img
+                  src="/image1.png"
+                  alt="건강한 식단"
+                  className="w-full h-auto object-cover"
+                />
               </div>
             </div>
           )}
