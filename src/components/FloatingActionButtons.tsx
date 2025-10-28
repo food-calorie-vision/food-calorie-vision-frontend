@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Utensils, ShoppingCart, ChefHat, Search, BarChart3 } from 'lucide-react';
+import { Plus, Utensils, ShoppingCart, ChefHat, Search, BarChart3, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 
 const FloatingActionButtons = () => {
@@ -9,38 +9,38 @@ const FloatingActionButtons = () => {
 
   const buttons = [
     {
-      id: 'diet',
+      id: 'diet_analysis',
       icon: Utensils,
-      label: '식단 관리',
-      href: '/dashboard',
+      label: '식단 분석',
+      href: '/meal-diary/analysis',
       color: 'bg-blue-500 hover:bg-blue-600'
     },
     {
-      id: 'shopping',
+      id: 'ingredient_input',
       icon: ShoppingCart,
-      label: '장보기',
-      href: '/shopping',
+      label: '식재료 입력',
+      href: '/meal-diary/ingredient',
       color: 'bg-green-500 hover:bg-green-600'
     },
     {
-      id: 'recipe',
-      icon: ChefHat,
-      label: '레시피',
-      href: '/recipe',
+      id: 'recipe_recommend',
+      icon: BookOpen,
+      label: '레시피 추천',
+      href: 'recommend?tab=recipe',
       color: 'bg-orange-500 hover:bg-orange-600'
     },
     {
-      id: 'search',
-      icon: Search,
-      label: '검색',
-      href: '/search',
+      id: 'diet_recommend',
+      icon: Utensils,
+      label: '식단 추천',
+      href: 'recommend?tab=diet',
       color: 'bg-purple-500 hover:bg-purple-600'
     },
     {
-      id: 'analytics',
+      id: 'contact',
       icon: BarChart3,
-      label: '분석',
-      href: '/analytics',
+      label: '문의하기',
+      href: '/contact',
       color: 'bg-red-500 hover:bg-red-600'
     }
   ];

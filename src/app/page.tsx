@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, createContext, useContext } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '../components/Header';
 
 // 로그인 상태를 공유할 Context
@@ -40,7 +41,6 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       sessionStorage.setItem('user_name', id);
       setIsLoggedIn(true);
       setUserName(id);
-      alert('로그인 성공!');
     } else {
       alert('사용자 정보가 올바르지 않습니다');
     }
@@ -85,9 +85,16 @@ function HomeContent({
   setPassword: (v: string) => void;
 }) {
   const { isLoggedIn, userName, handleLogin, handleLogout } = useContext(AuthContext);
+  const router = useRouter();
 
   const onLoginClick = () => {
-    handleLogin(id, password);
+    if (id === 'admin' && password === 'admin') {
+      handleLogin(id, password);
+      // 로그인 성공 후 바로 dashboard로 리다이렉트
+      router.push('/dashboard');
+    } else {
+      handleLogin(id, password);
+    }
   };
 
   const features = [
@@ -130,59 +137,74 @@ function HomeContent({
       {/* 메인 섹션 */}
       <section className="max-w-7xl mx-auto px-4 py-16 md:py-24">
         <div className="grid md:grid-cols-2 gap-12 items-center">
-          {/* 로그인 폼 */}
-          <div className="bg-white rounded-2xl shadow-lg p-8 h-fit">
-            <div className="space-y-6">
-              <div>
-                <label className="block text-slate-700 font-semibold mb-2">ID</label>
-                <input
-                  type="text"
-                  placeholder="아이디를 입력하세요"
-                  value={id}
-                  onChange={(e) => setId(e.target.value)}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+          {!isLoggedIn ? (
+            <>
+              {/* 로그인 폼 - 로그인되지 않았을 때만 표시 */}
+              <div className="bg-white rounded-2xl shadow-lg p-8 h-fit">
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-2">ID</label>
+                    <input
+                      type="text"
+                      placeholder="아이디를 입력하세요"
+                      value={id}
+                      onChange={(e) => setId(e.target.value)}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-2">Password</label>
+                    <input
+                      type="password"
+                      placeholder="비밀번호를 입력하세요"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+                    />
+                  </div>
+
+                  <button
+                    onClick={onLoginClick}
+                    className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition"
+                  >
+                    로그인
+                  </button>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <Link href="#" className="text-green-600 hover:text-green-700 font-medium">
+                      비밀번호 찾기
+                    </Link>
+                    <Link href="/signup" className="text-green-600 hover:text-green-700 font-medium">
+                      회원가입하기 →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
+              {/* 일러스트레이션 */}
+              <div className="hidden md:flex justify-center">
+                <div className="relative w-full h-80 bg-gradient-to-br from-green-100 to-blue-100 rounded-3xl flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-6xl mb-4">🏃‍♂️</div>
+                    <p className="text-slate-600 font-semibold">건강한 식단으로</p>
+                    <p className="text-slate-600 font-semibold">더 나은 내일을 만들어보세요</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            // 로그인 후: 이미지 표시
+            <div className="md:col-span-2 flex justify-center">
+              <div className="relative w-full max-w-4xl rounded-3xl overflow-hidden shadow-2xl border border-slate-200">
+                <img
+                  src="/image1.png"
+                  alt="건강한 식단"
+                  className="w-full h-auto object-cover"
                 />
               </div>
-
-              <div>
-                <label className="block text-slate-700 font-semibold mb-2">Password</label>
-                <input
-                  type="password"
-                  placeholder="비밀번호를 입력하세요"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-                />
-              </div>
-
-              <button
-                onClick={onLoginClick}
-                className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition"
-              >
-                로그인
-              </button>
-
-              <div className="flex items-center justify-between text-sm">
-                <Link href="#" className="text-green-600 hover:text-green-700 font-medium">
-                  비밀번호 찾기
-                </Link>
-                <Link href="/signup" className="text-green-600 hover:text-green-700 font-medium">
-                  회원가입하기 →
-                </Link>
-              </div>
             </div>
-          </div>
-
-          {/* 일러스트레이션 */}
-          <div className="hidden md:flex justify-center">
-            <div className="relative w-full h-80 bg-gradient-to-br from-green-100 to-blue-100 rounded-3xl flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-6xl mb-4">🏃‍♂️</div>
-                <p className="text-slate-600 font-semibold">건강한 식단으로</p>
-                <p className="text-slate-600 font-semibold">더 나은 내일을 만들어보세요</p>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </section>
 
