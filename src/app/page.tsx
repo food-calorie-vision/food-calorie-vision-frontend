@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useState, useEffect, createContext, useContext } from 'react';
 import { useRouter } from 'next/navigation';
-import Header from '../components/Header';
+import MobileHeader from '../components/MobileHeader';
+import MobileNav from '../components/MobileNav';
 
 // 로그인 상태를 공유할 Context
 const AuthContext = createContext<{
@@ -77,7 +78,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const sessionCheckInterval = setInterval(() => {
         const expire = sessionStorage.getItem('login_expire');
-        if (expire && Date.now() < Number(expire)) {
+        if (expire && Date.now() >= Number(expire)) {
+          alert('세션이 만료되었습니다. 다시 로그인해주세요.');
           handleLogout();
         }
       }, 10000);
@@ -171,12 +173,12 @@ function HomeContent({
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
+      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
 
-      {/* 메인 섹션 */}
-      <section className="max-w-7xl mx-auto px-4 py-16 md:py-24">
-        <div className="grid md:grid-cols-2 gap-12 items-center">
+      {/* 메인 섹션 - 모바일 최적화 */}
+      <section className="max-w-md mx-auto px-4 py-8">
+        <div className="space-y-8">
           {!isLoggedIn ? (
             <>
               {/* 로그인 폼 - 로그인되지 않았을 때만 표시 */}
@@ -248,28 +250,31 @@ function HomeContent({
         </div>
       </section>
 
-      {/* 주요 기능 섹션 */}
-      <section className="max-w-7xl mx-auto px-4 py-20">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-slate-900 mb-4">주요 기능</h2>
-          <p className="text-slate-600 text-lg">5가지 핵심 기능으로 건강한 식생활을 관리하세요</p>
+      {/* 주요 기능 섹션 - 모바일 최적화 */}
+      <section className="max-w-md mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">주요 기능</h2>
+          <p className="text-slate-600 text-sm">건강한 식생활을 위한 핵심 기능</p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-3">
           {features.map((feature, index) => (
             <div
               key={index}
               className="group cursor-pointer"
               onClick={() => console.log(`${feature.title} 클릭됨`)}
             >
-              <div
-                className={`h-64 bg-gradient-to-br ${feature.color} rounded-2xl p-8 text-white transform transition hover:scale-105 hover:shadow-2xl`}
-              >
-                <div className="h-full flex flex-col justify-between">
-                  <div className="text-5xl">{feature.icon}</div>
-                  <div>
-                    <h3 className="text-2xl font-bold mb-2">{feature.title}</h3>
-                    <p className="text-white/90 text-sm">{feature.description}</p>
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all active:scale-[0.98]">
+                <div className="flex items-center gap-4">
+                  {/* 아이콘 - 동그란 배경에 색상 */}
+                  <div className={`flex-shrink-0 w-14 h-14 bg-gradient-to-br ${feature.color} rounded-2xl flex items-center justify-center text-2xl shadow-sm`}>
+                    {feature.icon}
+                  </div>
+                  
+                  {/* 텍스트 */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-bold text-slate-900 mb-0.5">{feature.title}</h3>
+                    <p className="text-xs text-slate-600 leading-relaxed">{feature.description}</p>
                   </div>
                 </div>
               </div>
@@ -303,34 +308,44 @@ function HomeContent({
         </div>
       </section>
 
-      {/* 특징 섹션 */}
-      <section className="max-w-7xl mx-auto px-4 py-20">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold text-slate-900 mb-2">이것은 권장이 아닌 필수인 운동</h2>
-          <p className="text-slate-600">헬시 라이프</p>
+      {/* 특징 섹션 - 모바일 최적화 */}
+      <section className="max-w-md mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">함께 만들어가는 건강한 습관</h2>
+          <p className="text-slate-600 text-sm">당신의 건강한 변화를 응원합니다</p>
         </div>
-        <div className="grid md:grid-cols-3 gap-8">
+        <div className="space-y-3">
           {[
             { icon: '👥', title: '커뮤니티', desc: '함께 건강을 추구하는 사람들과 연결되세요' },
             { icon: '🏢', title: '기업/기관', desc: '회사와 기관 단위의 건강 프로그램을 운영하세요' },
             { icon: '🔗', title: '연동', desc: '다른 건강 앱과 쉽게 연동하세요' },
           ].map((item, i) => (
-            <div key={i} className="text-center">
-              <div className="text-5xl mb-4">{item.icon}</div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">{item.title}</h3>
-              <p className="text-slate-600">{item.desc}</p>
+            <div key={i} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all">
+              <div className="flex items-center gap-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl flex items-center justify-center text-2xl">
+                  {item.icon}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-slate-900 mb-0.5">{item.title}</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">{item.desc}</p>
+                </div>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
       {/* 푸터 */}
-      <footer className="bg-slate-900 text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="mb-4">KCalculator - 건강한 식단 관리의 시작</p>
-          <p className="text-slate-400 text-sm">© 2024 KCalculator. All rights reserved.</p>
+      {/* 푸터 - 모바일 최적화 */}
+      <footer className="bg-slate-900 text-white py-8 pb-20">
+        <div className="max-w-md mx-auto px-4 text-center">
+          <p className="mb-2 text-sm">KCalculator - 건강한 식단 관리의 시작</p>
+          <p className="text-slate-400 text-xs">© 2024 KCalculator. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* 모바일 하단 네비게이션 */}
+      {isLoggedIn && <MobileNav />}
     </div>
   );
 }

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Header from "@/components/Header";
+import MobileHeader from "@/components/MobileHeader";
+import MobileNav from "@/components/MobileNav";
 
 type FlowStep = "chat" | "select" | "cooking" | "complete";
 type ChatMessage = { role: "bot" | "user"; text: string };
@@ -348,56 +349,56 @@ export default function RecommendPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white pb-16">
-      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
+      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
 
-      {/* 상단 탭 버튼 */}
-      <section className="max-w-7xl mx-auto px-4 py-6">
-        <div className="bg-white rounded-xl shadow-sm p-2 inline-flex gap-2">
+      {/* 상단 탭 버튼 - 모바일 최적화 */}
+      <section className="max-w-md mx-auto px-4 py-4">
+        <div className="bg-white rounded-xl shadow-sm p-1 flex gap-1 w-full">
           <button
             onClick={() => handleTabChange("recipe")}
-            className={`px-6 py-3 rounded-lg font-medium transition flex items-center gap-2 cursor-pointer ${
+            className={`flex-1 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2 cursor-pointer ${
               currentTab === "recipe"
                 ? "bg-green-500 text-white shadow-md"
-                : "text-slate-600 hover:bg-slate-50"
+                : "text-slate-600 active:bg-slate-50"
             }`}
           >
-            <span className="text-xl">🍳</span>
-            <span>레시피 추천</span>
+            <span className="text-lg">🍳</span>
+            <span className="text-sm">레시피 추천</span>
           </button>
 
           <button
             onClick={() => handleTabChange("diet")}
-            className={`px-6 py-3 rounded-lg font-medium transition flex items-center gap-2 cursor-pointer ${
+            className={`flex-1 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2 cursor-pointer ${
               currentTab === "diet"
                 ? "bg-green-500 text-white shadow-md"
-                : "text-slate-600 hover:bg-slate-50"
+                : "text-slate-600 active:bg-slate-50"
             }`}
           >
-            <span className="text-xl">🥗</span>
-            <span>식단 추천</span>
+            <span className="text-lg">🥗</span>
+            <span className="text-sm">식단 추천</span>
           </button>
         </div>
       </section>
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-md mx-auto px-4 py-4 pb-24">
         {/* 레시피 추천 탭 */}
         {currentTab === "recipe" && (
           <>
             {/* 1단계: 채팅 */}
             {flowStep === "chat" && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">🍳 레시피 추천</h1>
-                  <p className="text-slate-600">건강 상태를 고려한 맞춤 레시피를 추천받으세요</p>
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <h1 className="text-2xl font-bold text-slate-900 mb-2">🍳 레시피 추천</h1>
+                  <p className="text-sm text-slate-600">건강 상태를 고려한 맞춤 레시피를 추천받으세요</p>
                 </div>
 
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                  <div className="space-y-4 mb-4 max-h-96 overflow-y-auto">
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                  <div className="space-y-3 mb-4 min-h-[400px] max-h-[500px] overflow-y-auto">
                     {messages.map((m, idx) => (
                       <div
                         key={idx}
-                        className={`max-w-[80%] rounded-lg px-4 py-3 leading-relaxed whitespace-pre-line ${
+                        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-line ${
                           m.role === "bot"
                             ? "bg-slate-100 text-slate-800 border border-slate-200"
                             : "bg-green-500 text-white ml-auto shadow"
@@ -408,16 +409,16 @@ export default function RecommendPage() {
                     ))}
 
                     {isLoading && (
-                      <div className="max-w-[80%] rounded-lg px-4 py-3 bg-slate-100 text-slate-500 border border-slate-200">
+                      <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-500 border border-slate-200">
                         답변 작성 중이에요...
                       </div>
                     )}
                   </div>
 
-                  <div className="border-t border-slate-200 pt-4 flex items-center gap-2">
+                  <div className="border-t border-slate-200 pt-3 flex items-center gap-2">
                     <input
-                      className="flex-1 border border-slate-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      placeholder="예) 나 오늘 대창 먹을건데 레시피 추천해줘"
+                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="예) 나 오늘 대창 먹을건데"
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -431,10 +432,10 @@ export default function RecommendPage() {
                     <button
                       onClick={sendChat}
                       disabled={isLoading}
-                      className={`px-6 py-3 rounded-lg font-medium transition ${
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition ${
                         isLoading
                           ? "bg-slate-400 text-white cursor-not-allowed"
-                          : "bg-green-500 text-white hover:bg-green-600"
+                          : "bg-green-500 text-white active:bg-green-600"
                       }`}
                     >
                       보내기
@@ -443,9 +444,9 @@ export default function RecommendPage() {
                 </div>
 
                 {/* 안내 문구 */}
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-                  <div className="font-semibold mb-2">💡 이렇게 물어보세요</div>
-                  <ul className="list-disc pl-5 space-y-1 text-sm">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
+                  <div className="font-semibold mb-1">💡 이렇게 물어보세요</div>
+                  <ul className="list-disc pl-4 space-y-1">
                     <li>"나 오늘 대창 먹을건데 레시피 추천해줘"</li>
                     <li>"닭가슴살이랑 브로콜리 있는데 요리법 알려줘"</li>
                     <li>"저염식 고등어 요리 레시피 알려줘"</li>
@@ -456,37 +457,37 @@ export default function RecommendPage() {
 
             {/* 2단계: 레시피 선택 */}
             {flowStep === "select" && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">추천 레시피</h1>
-                  <p className="text-slate-600">사용자 정보를 기반으로 추천된 레시피입니다</p>
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <h1 className="text-2xl font-bold text-slate-900 mb-2">추천 레시피</h1>
+                  <p className="text-sm text-slate-600">사용자 정보를 기반으로 추천된 레시피입니다</p>
                 </div>
 
                 {healthWarning && (
-                  <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-6">
-                    <p className="text-amber-900 whitespace-pre-line leading-relaxed">{healthWarning}</p>
+                  <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4">
+                    <p className="text-xs text-amber-900 whitespace-pre-line leading-relaxed">{healthWarning}</p>
                   </div>
                 )}
 
-                <div className="grid md:grid-cols-3 gap-4">
+                <div className="space-y-3">
                   {recommendedRecipes.map((recipe, idx) => (
                     <button
                       key={idx}
                       onClick={() => selectRecipe(recipe)}
-                      className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-green-500 hover:shadow-lg transition text-left"
+                      className="w-full bg-white border-2 border-slate-200 rounded-xl p-4 active:border-green-500 active:shadow-lg transition text-left"
                     >
-                      <div className="text-2xl mb-3">🍽️</div>
-                      <h3 className="text-lg font-bold text-slate-900 mb-2">{recipe.name}</h3>
-                      <p className="text-sm text-slate-600 leading-relaxed">{recipe.description}</p>
-                      <div className="mt-4 text-green-600 font-medium text-sm">선택하기 →</div>
+                      <div className="text-xl mb-2">🍽️</div>
+                      <h3 className="text-base font-bold text-slate-900 mb-1">{recipe.name}</h3>
+                      <p className="text-xs text-slate-600 leading-relaxed">{recipe.description}</p>
+                      <div className="mt-3 text-green-600 font-medium text-xs">선택하기 →</div>
                     </button>
                   ))}
                 </div>
 
-                <div className="text-center">
+                <div className="text-center mt-4">
                   <button
                     onClick={resetFlow}
-                    className="text-slate-600 hover:text-slate-900 underline"
+                    className="text-sm text-slate-600 active:text-slate-900 underline"
                   >
                     처음으로 돌아가기
                   </button>
@@ -496,39 +497,39 @@ export default function RecommendPage() {
 
             {/* 3단계: 조리 과정 */}
             {flowStep === "cooking" && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">{selectedRecipe?.name}</h1>
-                  <p className="text-slate-600">{recipeIntro}</p>
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <h1 className="text-2xl font-bold text-slate-900 mb-2">{selectedRecipe?.name}</h1>
+                  <p className="text-sm text-slate-600">{recipeIntro}</p>
                 </div>
 
-                <div className="bg-white rounded-xl border-2 border-green-500 shadow-lg p-8">
-                  <div className="text-center mb-6">
-                    <div className="inline-block bg-green-500 text-white px-4 py-2 rounded-full font-bold mb-4">
+                <div className="bg-white rounded-xl border-2 border-green-500 shadow-lg p-6">
+                  <div className="text-center mb-4">
+                    <div className="inline-block bg-green-500 text-white px-3 py-1.5 rounded-full font-bold text-sm mb-3">
                       STEP {cookingSteps[currentStepIndex]?.stepNumber} / {cookingSteps.length}
                     </div>
                   </div>
 
-                  <div className="text-center mb-8">
-                    <p className="text-xl text-slate-800 leading-relaxed">
+                  <div className="text-center mb-6">
+                    <p className="text-base text-slate-800 leading-relaxed">
                       {cookingSteps[currentStepIndex]?.instruction}
                     </p>
                   </div>
 
-                  <div className="flex gap-4 justify-center">
+                  <div className="flex gap-3 justify-center">
                     <button
                       onClick={nextStep}
-                      className="px-8 py-4 bg-green-500 text-white rounded-lg font-bold text-lg hover:bg-green-600 transition shadow-md"
+                      className="flex-1 py-3 bg-green-500 text-white rounded-lg font-bold text-base active:bg-green-600 transition shadow-md"
                     >
                       {currentStepIndex < cookingSteps.length - 1 ? "다음 단계 →" : "조리 완료!"}
                     </button>
                   </div>
                 </div>
 
-                <div className="fixed bottom-8 right-8">
+                <div className="fixed bottom-20 right-4 z-20">
                   <button
                     onClick={exitCooking}
-                    className="px-4 py-2 bg-slate-600 text-white rounded-lg text-sm hover:bg-slate-700 transition shadow-lg"
+                    className="px-3 py-2 bg-slate-600 text-white rounded-lg text-xs active:bg-slate-700 transition shadow-lg"
                   >
                     종료
                   </button>
@@ -538,26 +539,26 @@ export default function RecommendPage() {
 
             {/* 4단계: 완료 */}
             {flowStep === "complete" && (
-              <div className="space-y-6">
-                <div className="text-center py-12">
-                  <div className="text-6xl mb-6">🎉</div>
-                  <h1 className="text-3xl font-bold text-slate-900 mb-4">
-                    맛있는 "{selectedRecipe?.name}"이 완성되었습니다!
+              <div className="space-y-4">
+                <div className="text-center py-8">
+                  <div className="text-5xl mb-4">🎉</div>
+                  <h1 className="text-2xl font-bold text-slate-900 mb-3">
+                    맛있는 "{selectedRecipe?.name}"이<br />완성되었습니다!
                   </h1>
-                  <p className="text-lg text-slate-600 mb-8">이 음식을 바로 기록 하시겠습니까?</p>
+                  <p className="text-sm text-slate-600 mb-6">이 음식을 바로 기록 하시겠습니까?</p>
 
-                  <div className="flex gap-4 justify-center">
+                  <div className="space-y-3 px-4">
                     <button
                       onClick={recordFood}
-                      className="px-8 py-4 bg-green-500 text-white rounded-lg font-bold text-lg hover:bg-green-600 transition shadow-md"
+                      className="w-full py-3 bg-green-500 text-white rounded-lg font-bold text-base active:bg-green-600 transition shadow-md"
                     >
                       음식 기록하기
                     </button>
                     <button
                       onClick={() => router.push("/")}
-                      className="px-8 py-4 bg-slate-200 text-slate-700 rounded-lg font-bold text-lg hover:bg-slate-300 transition"
+                      className="w-full py-3 bg-slate-200 text-slate-700 rounded-lg font-bold text-base active:bg-slate-300 transition"
                     >
-                      종료 후 메인 페이지로 이동
+                      메인으로 돌아가기
                     </button>
                   </div>
                 </div>
@@ -571,18 +572,18 @@ export default function RecommendPage() {
           <>
             {/* 1단계: 채팅 (식단 추천) */}
             {dietFlowStep === "chat" && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">🥗 식단 추천</h1>
-                  <p className="text-slate-600">건강 상태를 고려한 맞춤 식단을 추천받으세요</p>
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <h1 className="text-2xl font-bold text-slate-900 mb-2">🥗 식단 추천</h1>
+                  <p className="text-sm text-slate-600">건강 상태를 고려한 맞춤 식단을 추천받으세요</p>
                 </div>
 
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                  <div className="space-y-4 mb-4 max-h-96 overflow-y-auto">
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                  <div className="space-y-3 mb-4 min-h-[400px] max-h-[500px] overflow-y-auto">
                     {dietMessages.map((m, idx) => (
                       <div
                         key={idx}
-                        className={`max-w-[80%] rounded-lg px-4 py-3 leading-relaxed whitespace-pre-line ${
+                        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-line ${
                           m.role === "bot"
                             ? "bg-slate-100 text-slate-800 border border-slate-200"
                             : "bg-green-500 text-white ml-auto shadow"
@@ -593,16 +594,16 @@ export default function RecommendPage() {
                     ))}
 
                     {dietLoading && (
-                      <div className="max-w-[80%] rounded-lg px-4 py-3 bg-slate-100 text-slate-500 border border-slate-200">
+                      <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-500 border border-slate-200">
                         식단 추천 중이에요...
                       </div>
                     )}
                   </div>
 
-                  <div className="border-t border-slate-200 pt-4 flex items-center gap-2">
+                  <div className="border-t border-slate-200 pt-3 flex items-center gap-2">
                     <input
-                      className="flex-1 border border-slate-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      placeholder="예) 요즘 고기류를 먹고 싶은데 식단 추천해줘"
+                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="예) 고기류 먹고 싶은데"
                       value={dietChatInput}
                       onChange={(e) => setDietChatInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -616,10 +617,10 @@ export default function RecommendPage() {
                     <button
                       onClick={sendDietChat}
                       disabled={dietLoading}
-                      className={`px-6 py-3 rounded-lg font-medium transition ${
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition ${
                         dietLoading
                           ? "bg-slate-400 text-white cursor-not-allowed"
-                          : "bg-green-500 text-white hover:bg-green-600"
+                          : "bg-green-500 text-white active:bg-green-600"
                       }`}
                     >
                       보내기
@@ -628,9 +629,9 @@ export default function RecommendPage() {
                 </div>
 
                 {/* 안내 문구 */}
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-                  <div className="font-semibold mb-2">💡 이렇게 물어보세요</div>
-                  <ul className="list-disc pl-5 space-y-1 text-sm">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
+                  <div className="font-semibold mb-1">💡 이렇게 물어보세요</div>
+                  <ul className="list-disc pl-4 space-y-1">
                     <li>"요즘 고기류를 먹고 싶은데 식단 추천해줘"</li>
                     <li>"내가 가진 식재료 기반으로 식단 짜줘"</li>
                     <li>"다이어트용 저칼로리 식단 알려줘"</li>
@@ -641,66 +642,66 @@ export default function RecommendPage() {
 
             {/* 2단계: 식단 선택 */}
             {dietFlowStep === "select" && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">추천 식단</h1>
-                  <p className="text-slate-600">원하시는 식단을 선택해주세요</p>
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <h1 className="text-2xl font-bold text-slate-900 mb-2">추천 식단</h1>
+                  <p className="text-sm text-slate-600">원하시는 식단을 선택해주세요</p>
                 </div>
 
-                <div className="grid md:grid-cols-3 gap-4">
+                <div className="space-y-3">
                   {recommendedDietPlans.map((plan, idx) => (
                     <button
                       key={idx}
                       onClick={() => selectDietPlan(plan)}
-                      className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-green-500 hover:shadow-lg transition text-left"
+                      className="w-full bg-white border-2 border-slate-200 rounded-xl p-4 active:border-green-500 active:shadow-lg transition text-left"
                     >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="text-2xl">🍽️</div>
-                        <span className="text-xs font-bold text-white bg-green-500 px-2 py-1 rounded">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="text-xl">🍽️</div>
+                        <span className="text-xs font-bold text-white bg-green-500 px-2 py-0.5 rounded">
                           {plan.totalCalories}
                         </span>
                       </div>
                       
-                      <h3 className="text-lg font-bold text-slate-900 mb-2">{plan.name}</h3>
-                      <p className="text-sm text-slate-600 mb-3">{plan.description}</p>
+                      <h3 className="text-base font-bold text-slate-900 mb-1">{plan.name}</h3>
+                      <p className="text-xs text-slate-600 mb-2">{plan.description}</p>
 
                       {/* 식사 구성 미리보기 */}
-                      <div className="space-y-2 mb-3 text-xs">
+                      <div className="space-y-1.5 mb-2">
                         {plan.meals.breakfast && (
-                          <div className="bg-orange-50 rounded px-2 py-1">
+                          <div className="bg-orange-50 rounded px-2 py-1 text-xs">
                             <span className="font-semibold text-orange-700">🌅 아침:</span>
-                            <span className="text-slate-600 ml-1">{plan.meals.breakfast.slice(0, 20)}...</span>
+                            <span className="text-slate-600 ml-1">{plan.meals.breakfast.slice(0, 18)}...</span>
                           </div>
                         )}
                         {plan.meals.lunch && (
-                          <div className="bg-yellow-50 rounded px-2 py-1">
+                          <div className="bg-yellow-50 rounded px-2 py-1 text-xs">
                             <span className="font-semibold text-yellow-700">☀️ 점심:</span>
-                            <span className="text-slate-600 ml-1">{plan.meals.lunch.slice(0, 20)}...</span>
+                            <span className="text-slate-600 ml-1">{plan.meals.lunch.slice(0, 18)}...</span>
                           </div>
                         )}
                         {plan.meals.dinner && (
-                          <div className="bg-indigo-50 rounded px-2 py-1">
+                          <div className="bg-indigo-50 rounded px-2 py-1 text-xs">
                             <span className="font-semibold text-indigo-700">🌙 저녁:</span>
-                            <span className="text-slate-600 ml-1">{plan.meals.dinner.slice(0, 20)}...</span>
+                            <span className="text-slate-600 ml-1">{plan.meals.dinner.slice(0, 18)}...</span>
                           </div>
                         )}
                       </div>
 
                       {plan.nutrients && (
-                        <div className="text-xs text-slate-500 border-t pt-2">
+                        <div className="text-xs text-slate-500 border-t pt-1.5">
                           {plan.nutrients}
                         </div>
                       )}
 
-                      <div className="mt-4 text-green-600 font-medium text-sm">선택하기 →</div>
+                      <div className="mt-2 text-green-600 font-medium text-xs">선택하기 →</div>
                     </button>
                   ))}
                 </div>
 
-                <div className="text-center">
+                <div className="text-center mt-4">
                   <button
                     onClick={resetDietFlow}
-                    className="text-slate-600 hover:text-slate-900 underline"
+                    className="text-sm text-slate-600 active:text-slate-900 underline"
                   >
                     처음으로 돌아가기
                   </button>
@@ -710,83 +711,83 @@ export default function RecommendPage() {
 
             {/* 3단계: 완료 */}
             {dietFlowStep === "complete" && selectedDietPlan && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <div className="text-6xl mb-6">✅</div>
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <div className="text-5xl mb-4">✅</div>
+                  <h1 className="text-2xl font-bold text-slate-900 mb-2">
                     {selectedDietPlan.name}
                   </h1>
-                  <p className="text-lg text-slate-600 mb-2">{selectedDietPlan.description}</p>
-                  <div className="inline-block bg-green-100 text-green-800 px-4 py-2 rounded-full font-bold">
+                  <p className="text-sm text-slate-600 mb-2">{selectedDietPlan.description}</p>
+                  <div className="inline-block bg-green-100 text-green-800 px-3 py-1.5 rounded-full font-bold text-sm">
                     {selectedDietPlan.totalCalories}
                   </div>
                 </div>
 
                 {/* 식단 상세 보기 */}
-                <div className="bg-white rounded-xl border-2 border-slate-200 shadow-md p-8 max-w-3xl mx-auto">
-                  <h2 className="text-xl font-bold text-slate-900 mb-6 text-center">하루 식단 구성</h2>
+                <div className="bg-white rounded-xl border-2 border-slate-200 shadow-md p-4">
+                  <h2 className="text-lg font-bold text-slate-900 mb-4 text-center">하루 식단 구성</h2>
                   
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {selectedDietPlan.meals.breakfast && (
-                      <div className="bg-orange-50 rounded-xl p-4 border border-orange-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">🌅</span>
-                          <h3 className="text-lg font-bold text-orange-700">아침</h3>
+                      <div className="bg-orange-50 rounded-xl p-3 border border-orange-200">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-lg">🌅</span>
+                          <h3 className="text-sm font-bold text-orange-700">아침</h3>
                         </div>
-                        <p className="text-slate-700 leading-relaxed">{selectedDietPlan.meals.breakfast}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed">{selectedDietPlan.meals.breakfast}</p>
                       </div>
                     )}
 
                     {selectedDietPlan.meals.lunch && (
-                      <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">☀️</span>
-                          <h3 className="text-lg font-bold text-yellow-700">점심</h3>
+                      <div className="bg-yellow-50 rounded-xl p-3 border border-yellow-200">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-lg">☀️</span>
+                          <h3 className="text-sm font-bold text-yellow-700">점심</h3>
                         </div>
-                        <p className="text-slate-700 leading-relaxed">{selectedDietPlan.meals.lunch}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed">{selectedDietPlan.meals.lunch}</p>
                       </div>
                     )}
 
                     {selectedDietPlan.meals.dinner && (
-                      <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">🌙</span>
-                          <h3 className="text-lg font-bold text-indigo-700">저녁</h3>
+                      <div className="bg-indigo-50 rounded-xl p-3 border border-indigo-200">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-lg">🌙</span>
+                          <h3 className="text-sm font-bold text-indigo-700">저녁</h3>
                         </div>
-                        <p className="text-slate-700 leading-relaxed">{selectedDietPlan.meals.dinner}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed">{selectedDietPlan.meals.dinner}</p>
                       </div>
                     )}
 
                     {selectedDietPlan.meals.snack && (
-                      <div className="bg-pink-50 rounded-xl p-4 border border-pink-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">🍎</span>
-                          <h3 className="text-lg font-bold text-pink-700">간식</h3>
+                      <div className="bg-pink-50 rounded-xl p-3 border border-pink-200">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-lg">🍎</span>
+                          <h3 className="text-sm font-bold text-pink-700">간식</h3>
                         </div>
-                        <p className="text-slate-700 leading-relaxed">{selectedDietPlan.meals.snack}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed">{selectedDietPlan.meals.snack}</p>
                       </div>
                     )}
                   </div>
 
                   {selectedDietPlan.nutrients && (
-                    <div className="mt-6 pt-6 border-t border-slate-200">
-                      <h3 className="text-sm font-semibold text-slate-700 mb-2">영양소 구성</h3>
-                      <p className="text-slate-600">{selectedDietPlan.nutrients}</p>
+                    <div className="mt-4 pt-4 border-t border-slate-200">
+                      <h3 className="text-xs font-semibold text-slate-700 mb-1">영양소 구성</h3>
+                      <p className="text-xs text-slate-600">{selectedDietPlan.nutrients}</p>
                     </div>
                   )}
                 </div>
 
                 {/* 액션 버튼 */}
-                <div className="flex gap-4 justify-center mt-8">
+                <div className="space-y-3 px-4 mt-6">
                   <button
                     onClick={saveDietPlan}
-                    className="px-8 py-4 bg-green-500 text-white rounded-lg font-bold text-lg hover:bg-green-600 transition shadow-md"
+                    className="w-full py-3 bg-green-500 text-white rounded-lg font-bold text-base active:bg-green-600 transition shadow-md"
                   >
                     식단 저장하기
                   </button>
                   <button
                     onClick={() => router.push("/")}
-                    className="px-8 py-4 bg-slate-200 text-slate-700 rounded-lg font-bold text-lg hover:bg-slate-300 transition"
+                    className="w-full py-3 bg-slate-200 text-slate-700 rounded-lg font-bold text-base active:bg-slate-300 transition"
                   >
                     메인으로 돌아가기
                   </button>
@@ -796,6 +797,8 @@ export default function RecommendPage() {
           </>
         )}
       </main>
+
+      {isLoggedIn && <MobileNav />}
     </div>
   );
 }
