@@ -23,16 +23,83 @@ export default function SignupPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // 필수 입력 필드 검증
     if (!formData.userId || !formData.nickname || !formData.password) {
       alert('아이디, 닉네임, 비밀번호는 필수 입력 사항입니다.');
       return;
     }
+
+    if (formData.userId.length < 3) {
+      alert('아이디는 최소 3자 이상이어야 합니다.');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      alert('비밀번호는 최소 6자 이상이어야 합니다.');
+      return;
+    }
+
+    if (!formData.birthDate) {
+      alert('생년월일을 입력해주세요.');
+      return;
+    }
+
+    if (!formData.healthGoal) {
+      alert('건강 목표를 입력해주세요.');
+      return;
+    }
     
-    console.log('회원가입 데이터:', formData);
-    alert('회원가입이 완료되었습니다!');
-    // 여기서 실제로는 서버로 데이터를 전송해야 합니다
+    try {
+      // 생년월일 형식 변환: YYYYMMDD -> YYYY-MM-DD
+      let birthDateFormatted = formData.birthDate;
+      if (formData.birthDate.length === 8) {
+        const year = formData.birthDate.substring(0, 4);
+        const month = formData.birthDate.substring(4, 6);
+        const day = formData.birthDate.substring(6, 8);
+        birthDateFormatted = `${year}-${month}-${day}`;
+      }
+
+      // 백엔드 API에 맞게 데이터 변환
+      const signupData = {
+        user_id: formData.userId,
+        nickname: formData.nickname,
+        password: formData.password,
+        gender: formData.gender,
+        birth_date: birthDateFormatted, // YYYY-MM-DD 형식
+        has_allergy: formData.hasAllergy,
+        allergy_info: formData.allergyInfo || null,
+        body_type: formData.bodyType,
+        medical_condition: formData.medicalCondition || null,
+        health_goal: formData.healthGoal,
+        email: null, // 프론트엔드에 이메일 필드 없음
+      };
+
+      console.log('전송할 데이터:', signupData); // 디버깅용
+
+      const response = await fetch('http://localhost:8000/api/v1/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(signupData),
+      });
+
+      const data = await response.json();
+      console.log('서버 응답:', data); // 디버깅용
+
+      if (response.ok && data.success) {
+        alert('회원가입이 완료되었습니다! 로그인 페이지로 이동합니다.');
+        // 로그인 페이지로 이동
+        window.location.href = '/';
+      } else {
+        console.error('회원가입 실패:', data); // 상세 에러 로그
+        alert(data.detail || data.message || '회원가입에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('회원가입 오류:', error);
+      alert('회원가입 중 오류가 발생했습니다.');
+    }
   };
 
   return (

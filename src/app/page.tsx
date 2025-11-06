@@ -34,16 +34,35 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
 
-  // 로그인 처리 (admin / admin)
-  const handleLogin = (id: string, password: string) => {
-    if (id === 'admin' && password === 'admin') {
-      const expireTime = Date.now() + 10 * 60 * 1000; // 10분으로 함
-      sessionStorage.setItem('login_expire', expireTime.toString());
-      sessionStorage.setItem('user_name', id);
-      setIsLoggedIn(true);
-      setUserName(id);
-    } else {
-      alert('사용자 정보가 올바르지 않습니다');
+  // 로그인 처리 (백엔드 API 연동)
+  const handleLogin = async (id: string, password: string) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // 세션 쿠키 포함
+        body: JSON.stringify({
+          user_id: id,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const expireTime = Date.now() + 60 * 60 * 1000; // 1시간
+        sessionStorage.setItem('login_expire', expireTime.toString());
+        sessionStorage.setItem('user_name', data.user_id);
+        setIsLoggedIn(true);
+        setUserName(data.user_id);
+      } else {
+        alert(data.message || '사용자 정보가 올바르지 않습니다');
+      }
+    } catch (error) {
+      console.error('로그인 오류:', error);
+      alert('로그인 중 오류가 발생했습니다.');
     }
   };
 
@@ -127,13 +146,13 @@ function HomeContent({
   const { isLoggedIn, userName, handleLogin, handleLogout } = useContext(AuthContext);
   const router = useRouter();
 
-  const onLoginClick = () => {
-    if (id === 'admin' && password === 'admin') {
-      handleLogin(id, password);
-      // 로그인 성공 후 바로 dashboard로 리다이렉트
+  const onLoginClick = async () => {
+    await handleLogin(id, password);
+    // handleLogin이 성공하면 isLoggedIn이 true가 되므로
+    // useEffect에서 리다이렉트 처리하거나 여기서 직접 처리
+    const expire = sessionStorage.getItem('login_expire');
+    if (expire && Date.now() < Number(expire)) {
       router.push('/dashboard');
-    } else {
-      handleLogin(id, password);
     }
   };
 
