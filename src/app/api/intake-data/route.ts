@@ -1,24 +1,26 @@
 import { NextResponse } from 'next/server';
-import { UserIntakeData } from '@/types';
 
-// 실제로는 여기서 DB에서 사용자 섭취 현황을 조회합니다
+// FastAPI 백엔드로 프록시
 export async function GET() {
   try {
-    // 샘플 데이터 - 실제로는 DB 쿼리로 대체
-    const intakeData: UserIntakeData = {
-      totalCalories: 1850,
-      targetCalories: 2000,
-      nutrients: {
-        sodium: 1200,
-        carbs: 180,
-        protein: 85,
-        fat: 45,
-        sugar: 30
-      }
-    };
+    const apiEndpoint = process.env.FASTAPI_URL || 'http://localhost:8000';
+    
+    const response = await fetch(`${apiEndpoint}/api/v1/user/intake-data`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+    });
 
-    return NextResponse.json(intakeData);
-  } catch (_error) {
+    if (!response.ok) {
+      throw new Error(`Backend responded with status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Intake data API error:', error);
     return NextResponse.json(
       { error: '섭취 현황을 가져오는데 실패했습니다.' },
       { status: 500 }

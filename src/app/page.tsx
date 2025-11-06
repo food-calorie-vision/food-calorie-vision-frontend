@@ -33,10 +33,11 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+
   // 로그인 처리 (admin / admin)
   const handleLogin = (id: string, password: string) => {
     if (id === 'admin' && password === 'admin') {
-      const expireTime = Date.now() + 5 * 60 * 1000; // 5분
+      const expireTime = Date.now() + 10 * 60 * 1000; // 10분으로 함
       sessionStorage.setItem('login_expire', expireTime.toString());
       sessionStorage.setItem('user_name', id);
       setIsLoggedIn(true);
@@ -54,6 +55,45 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem('user_name');
     alert('로그아웃되었습니다.');
   };
+
+  const refreshSession = () => {
+    const expire = sessionStorage.getItem('login_expire');
+    if (expire && Date.now() < Number(expire)) {
+      const newExpireTime = Date.now() + 10 * 60 * 1000;
+      sessionStorage.setItem('login_expire', newExpireTime.toString());
+    }
+  };
+
+  useEffect(() => {
+    const handleRefreshSession = () => {
+      refreshSession();
+    };
+
+    if (isLoggedIn) {
+      window.addEventListener('mousemove', handleRefreshSession);
+      window.addEventListener('keydown', handleRefreshSession);
+      window.addEventListener('scroll', handleRefreshSession);
+      window.addEventListener('click', handleRefreshSession);
+
+      const sessionCheckInterval = setInterval(() => {
+        const expire = sessionStorage.getItem('login_expire');
+        if (expire && Date.now() < Number(expire)) {
+          handleLogout();
+        }
+      }, 10000);
+
+      return () => {
+        window.removeEventListener('mousemove', handleRefreshSession);
+        window.removeEventListener('keydown', handleRefreshSession);
+        window.removeEventListener('scroll', handleRefreshSession);
+        window.removeEventListener('click', handleRefreshSession);
+        clearInterval(sessionCheckInterval);
+      };
+    }
+
+  }, [isLoggedIn]);
+
+
 
   return (
     <AuthContext.Provider value={{ isLoggedIn, userName, handleLogin, handleLogout }}>
