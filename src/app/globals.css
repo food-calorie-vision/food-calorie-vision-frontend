@@ -21,6 +21,37 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  /* 모바일 최적화 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* 모바일 최적화 */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 하단 네비게이션 여백 */
+.mobile-content {
+  padding-bottom: 5rem;
+}
+
+/* Safe area inset for iPhone notch */
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 모바일 터치 최적화 */
+button, a {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 스크롤 부드럽게 */
+html {
+  scroll-behavior: smooth;
 }
 
 /* Chrome 자동 다크모드 방지 - input 필드 스타일 강제 */

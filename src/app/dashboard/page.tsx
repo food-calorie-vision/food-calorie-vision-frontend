@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Header from '@/components/Header';
+import MobileHeader from '@/components/MobileHeader';
+import MobileNav from '@/components/MobileNav';
 import MyScore from '@/components/MyScore';
 import DailyCalorieChart from '@/components/DailyCalorieChart';
 import FrequentFoodsList from '@/components/FrequentFoodsList';
@@ -36,17 +37,17 @@ export default function Dashboard() {
     }
   };
   return (
-    <div className="min-h-screen bg-white">
-      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+    <div className="min-h-screen bg-white mobile-content">
+      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 페이지 제목 */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900">MY PAGE</h1>
+      <main className="max-w-md mx-auto px-4 py-6">
+        {/* 페이지 제목 - 모바일 최적화 */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">MY PAGE</h1>
         </div>
 
-        {/* 메인 콘텐츠 그리드 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* 메인 콘텐츠 - 모바일 세로 레이아웃 */}
+        <div className="space-y-6">
           {/* 좌측: MY SCORE */}
           <div className="lg:col-span-1">
             <MyScore />
@@ -59,13 +60,13 @@ export default function Dashboard() {
         </div>
         
         {/* 하단: 자주 먹는 음식 리스트 */}
-        <div className="mt-8">
+        <div className="mt-6 pb-4">
           <FrequentFoodsList />
         </div>
       </main>
       
-      {/* 우측 플로팅 액션 버튼 */}
-      <FloatingActionButtons />
+      {/* 모바일 하단 네비게이션 */}
+      <MobileNav />
     </div>
   );
 }

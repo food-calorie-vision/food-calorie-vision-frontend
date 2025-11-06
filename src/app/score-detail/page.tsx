@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Award, TrendingUp, TrendingDown, Target } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Target } from 'lucide-react';
 import Link from 'next/link';
-import Header from '@/components/Header';
+import MobileHeader from '@/components/MobileHeader';
+import MobileNav from '@/components/MobileNav';
 
 interface ScoreDetail {
   overallScore: number;
@@ -126,13 +127,14 @@ export default function ScoreDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white">
-        <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded mb-8"></div>
-            <div className="h-64 bg-gray-200 rounded mb-8"></div>
-            <div className="h-32 bg-gray-200 rounded"></div>
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
+        <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+        <div className="max-w-md mx-auto px-4 py-8">
+          <div className="animate-pulse space-y-4">
+            <div className="h-6 bg-slate-200 rounded"></div>
+            <div className="h-32 bg-slate-200 rounded"></div>
+            <div className="h-24 bg-slate-200 rounded"></div>
+            <div className="h-24 bg-slate-200 rounded"></div>
           </div>
         </div>
       </div>
@@ -141,79 +143,79 @@ export default function ScoreDetailPage() {
 
   if (!scoreDetail) {
     return (
-      <div className="min-h-screen bg-white">
-        <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <p className="text-gray-500">점수 데이터를 불러올 수 없습니다.</p>
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
+        <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+        <div className="max-w-md mx-auto px-4 py-8">
+          <p className="text-slate-500 text-center">점수 데이터를 불러올 수 없습니다.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
+      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
       
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-md mx-auto px-4 py-6 pb-24">
         {/* 뒤로가기 버튼 */}
-        <Link href="/dashboard" className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-8">
-          <ArrowLeft className="w-4 h-4 mr-2" />
+        <Link href="/dashboard" className="inline-flex items-center text-slate-600 active:text-slate-900 mb-6 text-sm">
+          <ArrowLeft className="w-4 h-4 mr-1" />
           대시보드로 돌아가기
         </Link>
 
         {/* 페이지 제목 */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">상세 점수 현황</h1>
-          <p className="text-gray-600">각 영역별 점수와 개선사항을 확인하세요</p>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-slate-900 mb-1">상세 점수 현황</h1>
+          <p className="text-sm text-slate-600">각 영역별 점수와 개선사항을 확인하세요</p>
         </div>
 
         {/* 전체 점수 요약 */}
-        <div className="bg-green-50 p-6 rounded-lg mb-8">
+        <div className="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-xl mb-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-2">전체 점수</h2>
-              <div className="flex items-center">
+              <h2 className="text-sm font-semibold text-slate-700 mb-2">전체 점수</h2>
+              <div className="flex items-baseline">
                 <span className="text-4xl font-bold text-green-600">{scoreDetail.overallScore}</span>
-                <span className="text-2xl font-bold text-gray-400 ml-1">/100</span>
+                <span className="text-xl font-bold text-slate-400 ml-1">/100</span>
               </div>
             </div>
             <div className="text-right">
-              <div className="flex items-center text-green-600 mb-1">
+              <div className="flex items-center justify-end text-green-600 mb-1">
                 <TrendingUp className="w-4 h-4 mr-1" />
-                <span className="text-sm font-medium">+{scoreDetail.scoreChange}점</span>
+                <span className="text-sm font-bold">+{scoreDetail.scoreChange}점</span>
               </div>
-              <p className="text-sm text-gray-600">전날 대비</p>
+              <p className="text-xs text-slate-600">전날 대비</p>
             </div>
           </div>
         </div>
 
         {/* 카테고리별 점수 */}
-        <div className="mb-8">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">영역별 점수</h3>
-          <div className="space-y-4">
+        <div className="mb-6">
+          <h3 className="text-lg font-bold text-slate-900 mb-3">영역별 점수</h3>
+          <div className="space-y-3">
             {scoreDetail.categories.map((category, index) => (
-              <div key={index} className="bg-white border border-gray-200 rounded-lg p-6">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-gray-900">{category.name}</h4>
+              <div key={index} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-slate-900 text-sm">{category.name}</h4>
                   <div className="flex items-center">
-                    {category.trend === 'up' && <TrendingUp className="w-4 h-4 text-green-500 mr-1" />}
-                    {category.trend === 'down' && <TrendingDown className="w-4 h-4 text-red-500 mr-1" />}
-                    {category.trend === 'same' && <Target className="w-4 h-4 text-gray-500 mr-1" />}
-                    <span className="text-lg font-bold text-gray-900">
-                      {category.score}/{category.maxScore}
+                    {category.trend === 'up' && <TrendingUp className="w-3 h-3 text-green-500 mr-1" />}
+                    {category.trend === 'down' && <TrendingDown className="w-3 h-3 text-red-500 mr-1" />}
+                    {category.trend === 'same' && <Target className="w-3 h-3 text-slate-500 mr-1" />}
+                    <span className="text-base font-bold text-slate-900">
+                      {category.score}<span className="text-slate-400">/{category.maxScore}</span>
                     </span>
                   </div>
                 </div>
                 
                 {/* 진행률 바 */}
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+                <div className="w-full bg-slate-200 rounded-full h-2 mb-2">
                   <div 
                     className="bg-green-500 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${(category.score / category.maxScore) * 100}%` }}
                   ></div>
                 </div>
                 
-                <p className="text-sm text-gray-600">{category.feedback}</p>
+                <p className="text-xs text-slate-600 leading-relaxed">{category.feedback}</p>
               </div>
             ))}
           </div>
@@ -221,14 +223,14 @@ export default function ScoreDetailPage() {
 
         {/* 주간 트렌드 */}
         <div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">주간 점수 트렌드</h3>
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <div className="grid grid-cols-7 gap-4">
+          <h3 className="text-lg font-bold text-slate-900 mb-3">주간 점수 트렌드</h3>
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm overflow-x-auto">
+            <div className="flex gap-2 min-w-max">
               {scoreDetail.weeklyTrend.map((day, index) => (
-                <div key={index} className="text-center">
-                  <p className="text-sm text-gray-600 mb-2">{day.date}</p>
-                  <div className="bg-green-50 rounded-lg p-3">
-                    <p className="text-lg font-bold text-green-600">{day.score}</p>
+                <div key={index} className="flex-1 min-w-[50px] text-center">
+                  <p className="text-xs text-slate-600 mb-2">{day.date}</p>
+                  <div className="bg-green-50 rounded-lg p-2 border border-green-200">
+                    <p className="text-base font-bold text-green-600">{day.score}</p>
                   </div>
                 </div>
               ))}
@@ -236,6 +238,8 @@ export default function ScoreDetailPage() {
           </div>
         </div>
       </div>
+
+      {isLoggedIn && <MobileNav />}
     </div>
   );
 }

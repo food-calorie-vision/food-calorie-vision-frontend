@@ -3,7 +3,8 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { ReactNode, useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
-import Header from '@/components/Header';
+import MobileHeader from '@/components/MobileHeader';
+import MobileNav from '@/components/MobileNav';
 
 interface MealDiaryLayoutProps {
   children: ReactNode;
@@ -53,41 +54,44 @@ export default function MealDiaryLayout({ children }: MealDiaryLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
+      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
 
-      {/* Tab Navigation */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="bg-white rounded-xl shadow-sm p-2 inline-flex gap-2">
+      {/* Tab Navigation - 모바일 최적화 */}
+      <div className="max-w-md mx-auto px-4 py-4">
+        <div className="bg-white rounded-xl shadow-sm p-1 flex gap-1">
           <button
             onClick={() => handleTabClick('meal')}
-            className={`px-6 py-3 rounded-lg font-medium transition flex items-center gap-2 cursor-pointer ${
+            className={`flex-1 px-4 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
               activeTab === 'meal'
                 ? 'bg-green-500 text-white shadow-md'
-                : 'text-slate-600 hover:bg-slate-50'
+                : 'text-slate-600 active:bg-slate-50'
             }`}
           >
             <span className="text-xl">🍽️</span>
-            <span>식단 분석</span>
+            <span className="text-sm">식단 분석</span>
           </button>
           <button
             onClick={() => handleTabClick('ingredient')}
-            className={`px-6 py-3 rounded-lg font-medium transition flex items-center gap-2 cursor-pointer ${
+            className={`flex-1 px-4 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
               activeTab === 'ingredient'
                 ? 'bg-green-500 text-white shadow-md'
-                : 'text-slate-600 hover:bg-slate-50'
+                : 'text-slate-600 active:bg-slate-50'
             }`}
           >
             <span className="text-xl">🥕</span>
-            <span>식재료 입력</span>
+            <span className="text-sm">식재료 입력</span>
           </button>
         </div>
       </div>
 
-      {/* Tab Content */}
-      <div className="max-w-7xl mx-auto px-4 pb-12">
+      {/* Tab Content - 모바일 최적화 */}
+      <div className="max-w-md mx-auto px-4 pb-6">
         {children}
       </div>
+
+      {/* 모바일 하단 네비게이션 */}
+      <MobileNav />
     </div>
   );
 }

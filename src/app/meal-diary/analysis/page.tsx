@@ -76,23 +76,23 @@ export default function MealDiaryPage() {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-8">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">식단 분석</h2>
-        <p className="text-slate-600">
-          음식 이미지를 업로드하면 AI가 자동으로 분석해드립니다. (한 이미지당 음식 1개)
+    <div className="bg-white rounded-xl shadow-sm p-4">
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-slate-900 mb-2">식단 분석</h2>
+        <p className="text-sm text-slate-600">
+          음식 이미지를 업로드하면 AI가 자동으로 분석해드립니다.
         </p>
       </div>
 
-      {/* 이미지 업로드 영역 */}
-      <div className="mb-6">
+      {/* 이미지 업로드 영역 - 모바일 최적화 */}
+      <div className="mb-4">
         <label
           htmlFor="meal-upload"
-          className="block w-full border-2 border-dashed border-slate-300 rounded-xl p-12 text-center cursor-pointer hover:border-green-500 hover:bg-green-50 transition"
+          className="block w-full border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer active:border-green-500 active:bg-green-50 transition"
         >
-          <div className="text-5xl mb-4">📸</div>
-          <div className="text-slate-700 font-medium mb-2">이미지 업로드</div>
-          <div className="text-sm text-slate-500">클릭하거나 드래그하여 이미지를 추가하세요</div>
+          <div className="text-4xl mb-3">📸</div>
+          <div className="text-slate-700 font-medium mb-1">이미지 업로드</div>
+          <div className="text-xs text-slate-500">터치하여 이미지를 추가하세요</div>
           <input
             id="meal-upload"
             type="file"
