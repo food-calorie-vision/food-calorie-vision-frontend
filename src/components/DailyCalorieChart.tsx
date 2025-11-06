@@ -5,44 +5,48 @@ import { Activity } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DailyCalorieData } from '@/types';
 
-const DailyCalorieChart = () => {
+interface DailyCalorieChartProps {
+  userInfo?: any; // 사용자 정보
+}
+
+const DailyCalorieChart = ({ userInfo }: DailyCalorieChartProps) => {
   const [data, setData] = useState<DailyCalorieData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [targetCalories] = useState(2000); // 목표 칼로리
+  const [targetCalories, setTargetCalories] = useState(2000); // 목표 칼로리
+
+  // userInfo에서 권장 칼로리 설정
+  useEffect(() => {
+    if (userInfo?.recommended_calories) {
+      setTargetCalories(userInfo.recommended_calories);
+    }
+  }, [userInfo]);
 
   useEffect(() => {
     const fetchCalorieData = async () => {
       try {
-        // 실제로는 API에서 7일간의 칼로리 데이터를 가져옴
-        // const response = await fetch('/api/daily-calories');
-        // const data = await response.json();
+        // 백엔드에서 7일간의 칼로리 데이터 가져오기
+        const response = await fetch('http://localhost:8000/api/v1/meal-records/weekly-calories?days=7', {
+          method: 'GET',
+          credentials: 'include', // 세션 쿠키 포함
+        });
         
-        // 임시 목업 데이터 (지난 7일간)
-        const mockData: DailyCalorieData[] = [
-          { date: '10-14', calories: 1800 },
-          { date: '10-15', calories: 1950 },
-          { date: '10-16', calories: 2100 },
-          { date: '10-17', calories: 1750 },
-          { date: '10-18', calories: 1700 },
-          { date: '10-19', calories: 2200 },
-          { date: '10-20', calories: 1850 },
-          { date: '10-21', calories: 2050 }
-        ];
-        
-        setData(mockData);
+        if (response.ok) {
+          const weeklyData = await response.json();
+          console.log('주간 칼로리 데이터:', weeklyData);
+          
+          // 데이터가 있으면 설정, 없으면 빈 배열
+          setData(weeklyData.length > 0 ? weeklyData : [
+            { date: '데이터', calories: 0 }
+          ]);
+        } else {
+          console.error('칼로리 데이터 조회 실패');
+          // 기본 빈 데이터
+          setData([{ date: '데이터 없음', calories: 0 }]);
+        }
       } catch (error) {
         console.error('칼로리 데이터를 가져오는데 실패했습니다:', error);
-        // 에러 시 기본 데이터 사용
-        setData([
-          { date: '10-14', calories: 1800 },
-          { date: '10-15', calories: 1950 },
-          { date: '10-16', calories: 2100 },
-          { date: '10-17', calories: 1750 },
-          { date: '10-18', calories: 1700 },
-          { date: '10-19', calories: 2200 },
-          { date: '10-20', calories: 1850 },
-          { date: '10-21', calories: 2050 }
-        ]);
+        // 에러 시 빈 데이터
+        setData([{ date: '에러', calories: 0 }]);
       } finally {
         setLoading(false);
       }

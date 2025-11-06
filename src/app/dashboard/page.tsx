@@ -13,29 +13,77 @@ export default function Dashboard() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState('');
+  const [userInfo, setUserInfo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const expire = sessionStorage.getItem('login_expire');
-      const user = sessionStorage.getItem('user_name');
-      
-      if (expire && Date.now() < Number(expire)) {
-        setIsLoggedIn(true);
-        setUserName(user || '');
-      }
-    }
-  }, []);
+    // 백엔드에서 사용자 정보 가져오기
+    const fetchUserInfo = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/auth/me', {
+          method: 'GET',
+          credentials: 'include', // 세션 쿠키 포함
+        });
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('login_expire');
-      sessionStorage.removeItem('user_name');
-      alert('로그아웃되었습니다.');
-      router.push('/');
+        if (response.ok) {
+          const data = await response.json();
+          console.log('사용자 정보:', data);
+          
+          if (data.user_id) {
+            setIsLoggedIn(true);
+            setUserName(data.nickname || data.user_id);
+            setUserInfo(data);
+          } else {
+            // 로그인되지 않음
+            router.push('/');
+          }
+        } else {
+          // 인증 실패
+          console.error('인증 실패');
+          router.push('/');
+        }
+      } catch (error) {
+        console.error('사용자 정보 가져오기 실패:', error);
+        router.push('/');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserInfo();
+  }, [router]);
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'include', // 세션 쿠키 포함
+      });
+
+      if (response.ok) {
+        setIsLoggedIn(false);
+        setUserName('');
+        setUserInfo(null);
+        alert('로그아웃되었습니다.');
+        router.push('/');
+      } else {
+        console.error('로그아웃 실패');
+        alert('로그아웃에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('로그아웃 에러:', error);
+      alert('로그아웃 중 오류가 발생했습니다.');
     }
   };
+  // 로딩 중일 때
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-xl text-gray-600">로딩 중...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white mobile-content">
       <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
@@ -50,12 +98,12 @@ export default function Dashboard() {
         <div className="space-y-6">
           {/* 좌측: MY SCORE */}
           <div className="lg:col-span-1">
-            <MyScore />
+            <MyScore userInfo={userInfo} />
           </div>
           
           {/* 중앙: 일일 칼로리 섭취량 */}
           <div className="lg:col-span-2">
-            <DailyCalorieChart />
+            <DailyCalorieChart userInfo={userInfo} />
           </div>
         </div>
         
