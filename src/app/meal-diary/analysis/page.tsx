@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import MealPeekSwiper from '@/components/MealPeekSwiper';
 
 type FoodPrediction = {
   name: string;
@@ -102,6 +103,16 @@ export default function MealDiaryPage() {
           />
         </label>
       </div>
+
+    {/* 스와이프 영역 */}
+    {images.length > 0 && (
+      <MealPeekSwiper
+        images={images}
+        onConfirmItem={(r) => {
+          console.log('확정 결과', r);
+        }}
+        />
+      )}
 
       {/* 업로드된 이미지 목록 */}
       {images.length > 0 && (
