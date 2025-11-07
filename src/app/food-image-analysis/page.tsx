@@ -107,21 +107,16 @@ export default function FoodImageAnalysisPage() {
     setAnalysisResult(null);
 
     try {
-      // 이미지를 Base64로 변환
-      const base64Image = await fileToBase64(uploadedImage);
+      // FormData로 이미지 전송
+      const formData = new FormData();
+      formData.append('file', uploadedImage);
 
-      // API 호출
-      const response = await fetch('/api/food-analysis', {
+      // 백엔드 API 직접 호출 (YOLO 엔드포인트)
+      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiEndpoint}/api/v1/food/analysis-upload`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageData: base64Image,
-          fileName: uploadedImage.name,
-          fileSize: uploadedImage.size,
-          fileType: uploadedImage.type
-        }),
+        body: formData,
+        credentials: 'include', // 세션 쿠키 포함
       });
 
       const result = await response.json();
