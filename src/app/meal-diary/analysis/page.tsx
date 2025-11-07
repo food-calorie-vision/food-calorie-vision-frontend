@@ -18,6 +18,11 @@ type UploadedImage = {
 export default function MealDiaryPage() {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [completedImages, setCompletedImages] = useState<Set<string>>(new Set());
+  const [showError, setShowError] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -38,6 +43,7 @@ export default function MealDiaryPage() {
 
   const handleAnalyze = () => {
     setIsAnalyzing(true);
+    setCompletedImages(new Set()); // 분석 시작 시 초기화
     
     // 모의 비전 모델 분석 (2초 후 결과 표시)
     setTimeout(() => {
@@ -56,24 +62,6 @@ export default function MealDiaryPage() {
     }, 2000);
   };
 
-  const togglePrediction = (imageId: string, foodName: string) => {
-    setImages((prev) =>
-      prev.map((img) => {
-        if (img.id !== imageId) return img;
-        return {
-          ...img,
-          predictions: img.predictions?.map((pred) => ({
-            ...pred,
-            selected: pred.name === foodName ? !pred.selected : pred.selected,
-          })),
-        };
-      })
-    );
-  };
-
-  const removeImage = (imageId: string) => {
-    setImages((prev) => prev.filter((img) => img.id !== imageId));
-  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm p-4">
@@ -106,73 +94,21 @@ export default function MealDiaryPage() {
 
     {/* 스와이프 영역 */}
     {images.length > 0 && (
-      <MealPeekSwiper
-        images={images}
-        onConfirmItem={(r) => {
-          console.log('확정 결과', r);
-        }}
+      <div
+        className={`transition-all duration-300 ${
+          showError ? 'border-4 border-red-500 rounded-2xl p-2' : ''
+        } ${isShaking ? 'animate-shake' : ''}`}
+      >
+        <MealPeekSwiper
+          images={images}
+          onConfirmItem={(r) => {
+            console.log('확정 결과', r);
+            setCompletedImages((prev) => new Set(prev).add(r.id));
+            // TODO: 서버에 저장하는 로직 추가
+          }}
         />
-      )}
-
-      {/* 업로드된 이미지 목록 */}
-      {images.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">
-            업로드된 이미지 ({images.length}개)
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {images.map((img) => (
-              <div key={img.id} className="border rounded-xl overflow-hidden">
-                <div className="relative">
-                  <img src={img.url} alt="음식" className="w-full h-48 object-cover" />
-                  <button
-                    onClick={() => removeImage(img.id)}
-                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 transition"
-                  >
-                    ×
-                  </button>
-                </div>
-
-                {/* 분석 결과 */}
-                {img.predictions && (
-                  <div className="p-4 bg-slate-50">
-                    <div className="text-sm font-semibold text-slate-700 mb-3">분석 결과:</div>
-                    <div className="space-y-2">
-                      {img.predictions.map((pred) => (
-                        <button
-                          key={pred.name}
-                          onClick={() => togglePrediction(img.id, pred.name)}
-                          className={`w-full flex items-center justify-between px-4 py-2 rounded-lg border-2 transition ${
-                            pred.selected
-                              ? 'bg-green-500 text-white border-green-600'
-                              : 'bg-white text-slate-700 border-slate-200 hover:border-green-300'
-                          }`}
-                        >
-                          <span className="font-medium">{pred.name}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm opacity-80">
-                              {(pred.confidence * 100).toFixed(0)}%
-                            </span>
-                            <div
-                              className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                                pred.selected
-                                  ? 'bg-white border-white'
-                                  : 'bg-slate-100 border-slate-300'
-                              }`}
-                            >
-                              {pred.selected && <span className="text-green-500 text-sm">✓</span>}
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      </div>
+    )}
 
       {/* 분석 버튼 */}
       {images.length > 0 && !images[0].predictions && (
@@ -187,10 +123,98 @@ export default function MealDiaryPage() {
 
       {/* 저장 버튼 */}
       {images.length > 0 && images[0].predictions && (
-        <button className="w-full bg-blue-500 text-white py-4 rounded-xl font-semibold hover:bg-blue-600 transition">
-          선택한 음식 저장하기
-        </button>
+        <>
+          <button
+            onClick={() => {
+              const incompleteCount = images.length - completedImages.size;
+              if (incompleteCount > 0) {
+                setShowError(true);
+                setIsShaking(true);
+                
+                // 모달 팝업 표시
+                setModalMessage(`아직 선택하지 않은 음식이 ${incompleteCount}개 있어요.\n모든 음식을 선택해주세요!`);
+                setShowModal(true);
+                
+                // 흔들림 애니메이션 종료
+                setTimeout(() => {
+                  setIsShaking(false);
+                }, 600);
+                
+                // 빨간 테두리 제거
+                setTimeout(() => {
+                  setShowError(false);
+                }, 2000);
+              } else {
+                // 모두 완료됨 - 저장 처리
+                setModalMessage('음식이 성공적으로 저장되었습니다! 🎉');
+                setShowModal(true);
+                // TODO: 실제 저장 로직 추가
+              }
+            }}
+            className="w-full bg-blue-500 text-white py-4 rounded-xl font-semibold hover:bg-blue-600 transition shadow-md"
+          >
+            선택한 음식 저장하기
+          </button>
+          
+          {/* 진행 상황 표시 */}
+          <div className="mt-3 text-center text-sm text-slate-600">
+            {completedImages.size} / {images.length} 개 완료
+          </div>
+        </>
       )}
+      
+      {/* 커스텀 모달 */}
+      {showModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="text-4xl mb-4">
+                {modalMessage.includes('성공') ? '🎉' : '⚠️'}
+              </div>
+              <p className="text-lg font-medium text-slate-800 whitespace-pre-line leading-relaxed mb-6">
+                {modalMessage}
+              </p>
+              <button
+                onClick={() => setShowModal(false)}
+                className="w-full bg-green-500 text-white py-3 rounded-xl font-semibold hover:bg-green-600 transition"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 애니메이션 CSS */}
+      <style jsx>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+          20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .animate-shake {
+          animation: shake 0.6s ease-in-out;
+        }
+        @keyframes modal {
+          from {
+            opacity: 0;
+            transform: scale(0.9) translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        .animate-modal {
+          animation: modal 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

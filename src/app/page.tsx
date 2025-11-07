@@ -53,7 +53,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        const expireTime = Date.now() + 60 * 60 * 1000; // 1시간
+        const expireTime = Date.now() + 10 * 60 * 1000; // 10분 (테스트용)
         sessionStorage.setItem('login_expire', expireTime.toString());
         sessionStorage.setItem('user_id', data.user_id); // BIGINT user_id 저장
         
@@ -99,6 +99,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem('user_name');
     sessionStorage.removeItem('user_id');
     alert('로그아웃되었습니다.');
+    // 로그인 페이지로 이동
+    window.location.href = '/';
   };
 
   const refreshSession = () => {
@@ -123,8 +125,13 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       const sessionCheckInterval = setInterval(() => {
         const expire = sessionStorage.getItem('login_expire');
         if (expire && Date.now() >= Number(expire)) {
-          alert('세션이 만료되었습니다. 다시 로그인해주세요.');
-          handleLogout();
+          setIsLoggedIn(false);
+          setUserName('');
+          sessionStorage.removeItem('login_expire');
+          sessionStorage.removeItem('user_name');
+          sessionStorage.removeItem('user_id');
+          alert('오래 활동하지 않아 자동 로그아웃되었습니다.\n다시 로그인해주세요.');
+          window.location.href = '/';
         }
       }, 10000);
 
@@ -235,6 +242,12 @@ function HomeContent({
                       placeholder="이메일을 입력하세요"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          onLoginClick();
+                        }
+                      }}
                       className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
                     />
                   </div>
@@ -246,6 +259,12 @@ function HomeContent({
                       placeholder="비밀번호를 입력하세요"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          onLoginClick();
+                        }
+                      }}
                       className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
                     />
                   </div>
