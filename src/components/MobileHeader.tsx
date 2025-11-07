@@ -7,9 +7,10 @@ interface MobileHeaderProps {
   userName?: string;
   handleLogout?: () => void;
   showLogout?: boolean;
+  hideAuthButtons?: boolean; // 로그인/회원가입 버튼 숨김 옵션
 }
 
-const MobileHeader = ({ isLoggedIn, userName, handleLogout, showLogout = true }: MobileHeaderProps) => {
+const MobileHeader = ({ isLoggedIn, userName, handleLogout, showLogout = true, hideAuthButtons = false }: MobileHeaderProps) => {
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
       <div className="max-w-md mx-auto px-4">
@@ -23,40 +24,42 @@ const MobileHeader = ({ isLoggedIn, userName, handleLogout, showLogout = true }:
           </Link>
 
           {/* 로그인/사용자 정보 */}
-          <div className="flex items-center space-x-2">
-            {isLoggedIn ? (
-              <>
-                {userName && (
-                  <span className="text-sm font-medium text-gray-700 hidden xs:inline">
-                    {userName}님
-                  </span>
-                )}
-                {showLogout && handleLogout && (
-                  <button
-                    onClick={handleLogout}
-                    className="px-3 py-1.5 text-xs font-medium text-white bg-red-500 rounded-lg active:bg-red-600 transition-colors"
+          {!hideAuthButtons && (
+            <div className="flex items-center space-x-2">
+              {isLoggedIn ? (
+                <>
+                  {userName && (
+                    <span className="text-sm font-medium text-gray-700">
+                      {userName}님
+                    </span>
+                  )}
+                  {showLogout && handleLogout && (
+                    <button
+                      onClick={handleLogout}
+                      className="px-3 py-1.5 text-xs font-medium text-white bg-red-500 rounded-lg active:bg-red-600 transition-colors"
+                    >
+                      로그아웃
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/"
+                    className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg active:bg-gray-50"
                   >
-                    로그아웃
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/"
-                  className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg active:bg-gray-50"
-                >
-                  로그인
-                </Link>
-                <Link
-                  href="/signup"
-                  className="px-3 py-1.5 text-xs font-medium text-white bg-green-500 rounded-lg active:bg-green-600"
-                >
-                  회원가입
-                </Link>
-              </>
-            )}
-          </div>
+                    로그인
+                  </Link>
+                  <Link
+                    href="/signup"
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-green-500 rounded-lg active:bg-green-600"
+                  >
+                    회원가입
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>

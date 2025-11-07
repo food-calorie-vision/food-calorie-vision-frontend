@@ -31,7 +31,8 @@ export default function Dashboard() {
           
           if (data.user_id) {
             setIsLoggedIn(true);
-            setUserName(data.nickname || data.user_id);
+            // 닉네임이 있으면 닉네임, 없으면 username 사용
+            setUserName(data.nickname || data.username);
             setUserInfo(data);
           } else {
             // 로그인되지 않음
@@ -61,9 +62,16 @@ export default function Dashboard() {
       });
 
       if (response.ok) {
+        // 상태 초기화
         setIsLoggedIn(false);
         setUserName('');
         setUserInfo(null);
+        
+        // sessionStorage 완전히 정리
+        sessionStorage.removeItem('login_expire');
+        sessionStorage.removeItem('user_name');
+        sessionStorage.removeItem('user_id');
+        
         alert('로그아웃되었습니다.');
         router.push('/');
       } else {

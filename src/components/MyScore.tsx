@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Award, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
+import { translateHealthGoal } from '@/utils/healthGoalTranslator';
 import { ScoreData } from '@/types';
 
 interface MyScoreProps {
@@ -100,7 +101,7 @@ const MyScore = ({ userInfo }: MyScoreProps) => {
       {userInfo?.health_goal && (
         <div className="bg-blue-50 p-3 rounded-lg mb-4 text-center">
           <p className="text-sm text-gray-700">
-            <span className="font-semibold">목표:</span> {userInfo.health_goal}
+            <span className="font-semibold">목표:</span> {translateHealthGoal(userInfo.health_goal)}
           </p>
         </div>
       )}
