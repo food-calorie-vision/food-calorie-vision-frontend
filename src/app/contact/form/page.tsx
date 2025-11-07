@@ -14,22 +14,33 @@ export default function ContactFormPage() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState('');
+  const [userId, setUserId] = useState<number | null>(null);
   
   const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
   const [type, setType] = useState(typeOptions[0]);
+  const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
   const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const expire = sessionStorage.getItem('login_expire');
       const user = sessionStorage.getItem('user_name');
+      const userIdStr = sessionStorage.getItem('user_id');
       
       if (expire && Date.now() < Number(expire)) {
         setIsLoggedIn(true);
         setUserName(user || '');
         setNickname(user || '');
+        // user_id 우선순위: sessionStorage > 테스트용 1
+        if (userIdStr) {
+          setUserId(parseInt(userIdStr));
+        } else {
+          // 테스트용: sessionStorage에 없으면 user_id = 1 사용
+          setUserId(1);
+        }
       }
     }
   }, []);
@@ -45,9 +56,61 @@ export default function ContactFormPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // 세션 만료 체크
+  useEffect(() => {
+    const sessionCheckInterval = setInterval(() => {
+      const expire = sessionStorage.getItem('login_expire');
+      if (expire && Date.now() >= Number(expire)) {
+        setIsLoggedIn(false);
+        setUserName('');
+        sessionStorage.removeItem('login_expire');
+        sessionStorage.removeItem('user_name');
+        sessionStorage.removeItem('user_id');
+        alert('오래 활동하지 않아 자동 로그아웃되었습니다.\n다시 로그인해주세요.');
+        router.push('/');
+      }
+    }, 10000);
+
+    return () => clearInterval(sessionCheckInterval);
+  }, [router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setDone(true);
+    
+    if (!nickname || !email || !subject || !content) {
+      alert('모든 필수 항목을 입력해주세요.');
+      return;
+    }
+    
+    setSubmitting(true);
+    
+    try {
+      const res = await fetch('http://localhost:8000/api/v1/customer-service/inquiries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          nickname,
+          email,
+          inquiry_type: type,
+          subject,
+          content,
+        }),
+      });
+      
+      if (res.ok) {
+        setDone(true);
+      } else {
+        alert('문의 제출에 실패했습니다. 다시 시도해주세요.');
+      }
+    } catch (error) {
+      console.error('문의 제출 실패:', error);
+      alert('문의 제출에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (done) {
@@ -145,6 +208,21 @@ export default function ContactFormPage() {
             </select>
           </div>
 
+          {/* 문의 제목 */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              문의 제목 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="문의 제목을 입력해주세요"
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </div>
+
           {/* 문의 내용 */}
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -163,10 +241,15 @@ export default function ContactFormPage() {
           {/* 제출 버튼 */}
           <button
             type="submit"
-            className="w-full py-3 bg-green-500 text-white rounded-lg font-bold text-base active:bg-green-600 transition shadow-md flex items-center justify-center gap-2"
+            disabled={submitting}
+            className={`w-full py-3 rounded-lg font-bold text-base transition shadow-md flex items-center justify-center gap-2 ${
+              submitting 
+                ? 'bg-slate-400 text-white cursor-not-allowed' 
+                : 'bg-green-500 text-white active:bg-green-600'
+            }`}
           >
             <Send className="w-4 h-4" />
-            문의 제출하기
+            {submitting ? '제출 중...' : '문의 제출하기'}
           </button>
         </form>
 

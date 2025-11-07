@@ -6,11 +6,23 @@ import MobileNav from '@/components/MobileNav';
 import Link from 'next/link';
 import { MessageCircle, Bell, HelpCircle } from 'lucide-react';
 
+type Announcement = {
+  announcement_id: number;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  view_count: number;
+};
+
 export default function ContactPage() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState('');
   const [selectedFaq, setSelectedFaq] = useState(0);
+  const [notices, setNotices] = useState<Announcement[]>([]);
+  const [loadingNotices, setLoadingNotices] = useState(true);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -22,7 +34,42 @@ export default function ContactPage() {
         setUserName(user || '');
       }
     }
+    
+    // 공지사항 불러오기
+    fetchAnnouncements();
   }, []);
+
+  // 세션 만료 체크
+  useEffect(() => {
+    const sessionCheckInterval = setInterval(() => {
+      const expire = sessionStorage.getItem('login_expire');
+      if (expire && Date.now() >= Number(expire)) {
+        setIsLoggedIn(false);
+        setUserName('');
+        sessionStorage.removeItem('login_expire');
+        sessionStorage.removeItem('user_name');
+        sessionStorage.removeItem('user_id');
+        alert('오래 활동하지 않아 자동 로그아웃되었습니다.\n다시 로그인해주세요.');
+        router.push('/');
+      }
+    }, 10000); // 10초마다 체크
+
+    return () => clearInterval(sessionCheckInterval);
+  }, [router]);
+
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/v1/customer-service/announcements?limit=4');
+      if (res.ok) {
+        const data = await res.json();
+        setNotices(data.announcements || []);
+      }
+    } catch (error) {
+      console.error('공지사항 조회 실패:', error);
+    } finally {
+      setLoadingNotices(false);
+    }
+  };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -35,13 +82,10 @@ export default function ContactPage() {
     }
   };
 
-  const notices = [
-    { id: 1, date: '10.24', title: '업데이트 안내' },
-    { id: 2, date: '10.15', title: '서비스 점검 안내' },
-    { id: 3, date: '10.03', title: '이벤트 당첨자 발표' },
-    { id: 4, date: '09.27', title: '앱 UI/UX 개편 안내' },
-    { id: 5, date: '09.13', title: '추석 연휴 고객지원 안내' },
-  ];
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return `${date.getMonth() + 1}.${String(date.getDate()).padStart(2, '0')}`;
+  };
 
   const faqItems = [
     { 
@@ -123,16 +167,28 @@ export default function ContactPage() {
             공지사항
           </h2>
           <div className="space-y-1.5">
-            {notices.slice(0, 4).map((n) => (
-              <Link 
-                key={n.id}
-                href="#"
-                className="flex items-center justify-between py-1.5 px-2 bg-white rounded-xl border border-slate-100 active:border-green-300 active:bg-green-50 transition"
-              >
-                <span className="text-xs font-medium text-slate-700">{n.title}</span>
-                <span className="text-xs font-bold text-green-500">{n.date}</span>
-              </Link>
-            ))}
+            {loadingNotices ? (
+              <div className="space-y-1.5">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-10 bg-slate-100 rounded-xl animate-pulse"></div>
+                ))}
+              </div>
+            ) : notices.length > 0 ? (
+              notices.map((n, index) => (
+                <Link 
+                  key={n.announcement_id}
+                  href={`/contact/announcement/${n.announcement_id}`}
+                  className="flex items-center justify-between py-1.5 px-2 bg-white rounded-xl border border-slate-100 active:border-green-300 active:bg-green-50 transition"
+                >
+                  <span className="text-xs font-medium text-slate-700">{n.title}</span>
+                  <span className="text-xs font-bold text-green-500">{formatDate(n.created_at)}</span>
+                </Link>
+              ))
+            ) : (
+              <div className="text-center py-4 text-xs text-slate-500">
+                공지사항이 없습니다.
+              </div>
+            )}
           </div>
         </div>
 

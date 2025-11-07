@@ -6,7 +6,13 @@ import MobileHeader from "@/components/MobileHeader";
 import MobileNav from "@/components/MobileNav";
 
 type FlowStep = "chat" | "select" | "cooking" | "complete";
-type ChatMessage = { role: "bot" | "user"; text: string };
+type ChatMessage = { 
+  role: "bot" | "user"; 
+  text: string;
+  recipeCards?: Recipe[];
+  dietCards?: DietPlan[];
+  healthWarning?: string;
+};
 
 type Recipe = {
   name: string;
@@ -92,7 +98,7 @@ export default function RecommendPage() {
   const [recipeIntro, setRecipeIntro] = useState("");
 
   // 식단 추천 상태 (diet 탭용)
-  const [dietFlowStep, setDietFlowStep] = useState<"chat" | "select" | "complete">("chat");
+  const [dietFlowStep, setDietFlowStep] = useState<"chat" | "select" | "cooking" | "complete">("chat");
   const [dietMessages, setDietMessages] = useState<ChatMessage[]>([
     { role: "bot", text: "안녕하세요! 식단 추천 도우미입니다.\n식단 추천을 원하시면 말씀해주세요 🥗\n예) '요즘 고기류를 먹고 싶은데 식단 추천해줘', '내가 가진 식재료 기반으로 식단 짜줘'" }
   ]);
@@ -168,17 +174,26 @@ export default function RecommendPage() {
       const data = await res.json();
 
       if (data.reply) {
-        setMessages((prev) => [...prev, { role: "bot", text: data.reply }]);
-        
         // 더미 데이터로 레시피 추천 생성
-        setHealthWarning("⚠️ 건강 경고\n고지혈증이 있으신데 대창은 포화지방이 높아 권장하지 않습니다.");
-        setRecommendedRecipes([
+        const recipes: Recipe[] = [
           { name: "연어 덮밥", description: "신선한 연어를 활용한 고단백, 오메가-3 풍부한 건강식" },
           { name: "제육볶음", description: "돼지고기와 채소를 함께 볶아 영양 밸런스를 잡은 요리" },
           { name: "고등어 구이 정식", description: "등푸른 생선의 좋은 지방과 단백질이 풍부한 정식" },
-        ]);
+        ];
+        const warning = "⚠️ 건강 경고\n고지혈증이 있으신데 대창은 포화지방이 높아 권장하지 않습니다.";
         
-        setFlowStep("select");
+        setHealthWarning(warning);
+        setRecommendedRecipes(recipes);
+        
+        // 메시지에 레시피 카드 포함
+        setMessages((prev) => [...prev, { 
+          role: "bot", 
+          text: data.reply,
+          recipeCards: recipes,
+          healthWarning: warning
+        }]);
+        
+        // flowStep은 'chat' 상태 유지 (대화 중 선택 가능)
       }
     } catch (_err) {
       setMessages((prev) => [
@@ -260,10 +275,8 @@ export default function RecommendPage() {
       const data = await res.json();
 
       if (data.reply) {
-        setDietMessages((prev) => [...prev, { role: "bot", text: data.reply }]);
-        
         // 더미 데이터로 식단 옵션 생성
-        setRecommendedDietPlans([
+        const dietPlans: DietPlan[] = [
           {
             name: "고기 중심 식단 A",
             description: "고단백 식단으로 근육 생성에 도움",
@@ -300,9 +313,18 @@ export default function RecommendPage() {
             },
             nutrients: "단백질 80g / 탄수화물 120g / 지방 30g"
           }
-        ]);
+        ];
         
-        setDietFlowStep("select");
+        setRecommendedDietPlans(dietPlans);
+        
+        // 메시지에 식단 카드 포함
+        setDietMessages((prev) => [...prev, { 
+          role: "bot", 
+          text: data.reply,
+          dietCards: dietPlans
+        }]);
+        
+        // dietFlowStep은 'chat' 상태 유지 (대화 중 선택 가능)
       }
     } catch (_err) {
       setDietMessages((prev) => [
@@ -396,15 +418,45 @@ export default function RecommendPage() {
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
                   <div className="space-y-3 mb-4 min-h-[400px] max-h-[500px] overflow-y-auto">
                     {messages.map((m, idx) => (
-                      <div
-                        key={idx}
-                        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-line ${
-                          m.role === "bot"
-                            ? "bg-slate-100 text-slate-800 border border-slate-200"
-                            : "bg-green-500 text-white ml-auto shadow"
-                        }`}
-                      >
-                        {m.text}
+                      <div key={idx}>
+                        <div
+                          className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-line ${
+                            m.role === "bot"
+                              ? "bg-slate-100 text-slate-800 border border-slate-200"
+                              : "bg-green-500 text-white ml-auto shadow"
+                          }`}
+                        >
+                          {m.text}
+                        </div>
+                        
+                        {/* 건강 경고 표시 */}
+                        {m.healthWarning && (
+                          <div className="mt-3 bg-amber-50 border-2 border-amber-300 rounded-xl p-3">
+                            <p className="text-xs text-amber-900 font-medium whitespace-pre-line leading-relaxed">
+                              {m.healthWarning}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {/* 레시피 카드 표시 */}
+                        {m.recipeCards && m.recipeCards.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs text-slate-600 font-medium px-1">💚 추천 레시피를 선택해주세요</p>
+                            {m.recipeCards.map((recipe, recipeIdx) => (
+                              <button
+                                key={recipeIdx}
+                                onClick={() => {
+                                  setSelectedRecipe(recipe);
+                                  setFlowStep("cooking");
+                                }}
+                                className="w-full text-left bg-white border-2 border-slate-200 rounded-xl p-3 hover:border-green-400 hover:shadow-md transition-all active:scale-[0.98]"
+                              >
+                                <div className="font-medium text-slate-900 mb-1">{recipe.name}</div>
+                                <div className="text-xs text-slate-600 leading-relaxed">{recipe.description}</div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
 
@@ -581,15 +633,44 @@ export default function RecommendPage() {
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
                   <div className="space-y-3 mb-4 min-h-[400px] max-h-[500px] overflow-y-auto">
                     {dietMessages.map((m, idx) => (
-                      <div
-                        key={idx}
-                        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-line ${
-                          m.role === "bot"
-                            ? "bg-slate-100 text-slate-800 border border-slate-200"
-                            : "bg-green-500 text-white ml-auto shadow"
-                        }`}
-                      >
-                        {m.text}
+                      <div key={idx}>
+                        <div
+                          className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-line ${
+                            m.role === "bot"
+                              ? "bg-slate-100 text-slate-800 border border-slate-200"
+                              : "bg-green-500 text-white ml-auto shadow"
+                          }`}
+                        >
+                          {m.text}
+                        </div>
+                        
+                        {/* 식단 카드 표시 */}
+                        {m.dietCards && m.dietCards.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs text-slate-600 font-medium px-1">💚 추천 식단을 선택해주세요</p>
+                            {m.dietCards.map((plan, planIdx) => (
+                              <button
+                                key={planIdx}
+                                onClick={() => {
+                                  setSelectedDietPlan(plan);
+                                  setDietFlowStep("cooking");
+                                }}
+                                className="w-full text-left bg-white border-2 border-slate-200 rounded-xl p-3 hover:border-green-400 hover:shadow-md transition-all active:scale-[0.98]"
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="font-medium text-slate-900">{plan.name}</div>
+                                  <div className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full whitespace-nowrap ml-2">
+                                    {plan.totalCalories}
+                                  </div>
+                                </div>
+                                <div className="text-xs text-slate-600 mb-2 leading-relaxed">{plan.description}</div>
+                                <div className="text-xs text-slate-500 border-t border-slate-100 pt-2 mt-2">
+                                  {plan.nutrients}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
 
