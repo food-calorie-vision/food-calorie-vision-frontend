@@ -13,6 +13,9 @@ export default function FoodImageAnalysisPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<FoodAnalysisResult | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [mealType, setMealType] = useState('점심'); // 식사 유형
+  const [memo, setMemo] = useState(''); // 메모
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -144,6 +147,58 @@ export default function FoodImageAnalysisPage() {
       reader.onload = () => resolve(reader.result as string);
       reader.onerror = error => reject(error);
     });
+  };
+
+  // 식사 기록 저장
+  const saveMealRecord = async () => {
+    if (!analysisResult || !imagePreview) {
+      alert('저장할 분석 결과가 없습니다.');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      // 백엔드 API로 식사 기록 저장
+      const response = await fetch('http://localhost:8000/api/v1/meal-records', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // 세션 쿠키 포함
+        body: JSON.stringify({
+          meal_type: mealType,
+          image_url: imagePreview, // 실제로는 S3 등에 업로드한 URL 사용
+          foods: [
+            {
+              food_id: 1, // 임시 ID (실제로는 food_nutrients 테이블의 ID)
+              food_name: analysisResult.foodName,
+              quantity: 1.0,
+              calories: analysisResult.calories,
+              protein: analysisResult.nutrients.protein,
+              carbs: analysisResult.nutrients.carbs,
+              fat: analysisResult.nutrients.fat,
+            },
+          ],
+          memo: memo || null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('식사 기록이 저장되었습니다!');
+        router.push('/dashboard');
+      } else {
+        console.error('저장 실패:', data);
+        alert(data.detail || '식사 기록 저장에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('저장 에러:', error);
+      alert('식사 기록 저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -312,6 +367,46 @@ export default function FoodImageAnalysisPage() {
                       ))}
                     </ul>
                   </div>
+
+                  {/* 식사 유형 선택 */}
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h3 className="font-semibold text-gray-800 mb-2">식사 유형</h3>
+                    <select
+                      value={mealType}
+                      onChange={(e) => setMealType(e.target.value)}
+                      className="w-full p-2 border border-gray-300 rounded-lg"
+                    >
+                      <option value="아침">아침</option>
+                      <option value="점심">점심</option>
+                      <option value="저녁">저녁</option>
+                      <option value="간식">간식</option>
+                    </select>
+                  </div>
+
+                  {/* 메모 입력 */}
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h3 className="font-semibold text-gray-800 mb-2">메모 (선택)</h3>
+                    <textarea
+                      value={memo}
+                      onChange={(e) => setMemo(e.target.value)}
+                      placeholder="식사에 대한 메모를 입력하세요"
+                      className="w-full p-2 border border-gray-300 rounded-lg resize-none"
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* 저장 버튼 */}
+                  <button
+                    onClick={saveMealRecord}
+                    disabled={isSaving}
+                    className={`w-full py-3 px-6 rounded-lg font-semibold text-white transition-colors ${
+                      isSaving
+                        ? 'bg-gray-300 cursor-not-allowed'
+                        : 'bg-green-500 hover:bg-green-600'
+                    }`}
+                  >
+                    {isSaving ? '저장 중...' : '식사 기록 저장'}
+                  </button>
                 </div>
               </div>
             ) : (

@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation';
 import MobileHeader from '../components/MobileHeader';
 import MobileNav from '../components/MobileNav';
 
-// 로그인 상태를 공유할 Context
+// 로그인 상태를 공유할 Context (이메일 기반)
 const AuthContext = createContext<{
   isLoggedIn: boolean;
   userName: string;
-  handleLogin: (id: string, password: string) => void;
+  handleLogin: (email: string, password: string) => void;
   handleLogout: () => void;
 }>({
   isLoggedIn: false,
@@ -35,16 +35,58 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
 
-  // 로그인 처리 (admin / admin)
-  const handleLogin = (id: string, password: string) => {
-    if (id === 'admin' && password === 'admin') {
-      const expireTime = Date.now() + 10 * 60 * 1000; // 10분으로 함
-      sessionStorage.setItem('login_expire', expireTime.toString());
-      sessionStorage.setItem('user_name', id);
-      setIsLoggedIn(true);
-      setUserName(id);
-    } else {
-      alert('사용자 정보가 올바르지 않습니다');
+  // 로그인 처리 (이메일 기반, 백엔드 API 연동)
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // 세션 쿠키 포함
+        body: JSON.stringify({
+          email: email,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const expireTime = Date.now() + 60 * 60 * 1000; // 1시간
+        sessionStorage.setItem('login_expire', expireTime.toString());
+        sessionStorage.setItem('user_id', data.user_id); // BIGINT user_id 저장
+        
+        // 사용자 정보 가져오기 (닉네임 확인)
+        try {
+          const userResponse = await fetch('http://localhost:8000/api/v1/auth/me', {
+            method: 'GET',
+            credentials: 'include',
+          });
+          
+          if (userResponse.ok) {
+            const userData = await userResponse.json();
+            const displayName = userData.nickname || userData.username;
+            sessionStorage.setItem('user_name', displayName);
+            setUserName(displayName);
+          } else {
+            // 사용자 정보 가져오기 실패 시 username 사용
+            sessionStorage.setItem('user_name', data.username || email);
+            setUserName(data.username || email);
+          }
+        } catch (error) {
+          console.error('사용자 정보 가져오기 실패:', error);
+          sessionStorage.setItem('user_name', data.username || email);
+          setUserName(data.username || email);
+        }
+        
+        setIsLoggedIn(true);
+      } else {
+        alert(data.message || '이메일 또는 비밀번호가 올바르지 않습니다');
+      }
+    } catch (error) {
+      console.error('로그인 오류:', error);
+      alert('로그인 중 오류가 발생했습니다.');
     }
   };
 
@@ -52,8 +94,10 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUserName('');
+    // sessionStorage 완전히 정리
     sessionStorage.removeItem('login_expire');
     sessionStorage.removeItem('user_name');
+    sessionStorage.removeItem('user_id');
     alert('로그아웃되었습니다.');
   };
 
@@ -105,37 +149,37 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export default function Home() {
-  const [id, setId] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   return (
     <AuthProvider>
-      <HomeContent id={id} setId={setId} password={password} setPassword={setPassword} />
+      <HomeContent email={email} setEmail={setEmail} password={password} setPassword={setPassword} />
     </AuthProvider>
   );
 }
 
 function HomeContent({
-  id,
-  setId,
+  email,
+  setEmail,
   password,
   setPassword,
 }: {
-  id: string;
-  setId: (v: string) => void;
+  email: string;
+  setEmail: (v: string) => void;
   password: string;
   setPassword: (v: string) => void;
 }) {
   const { isLoggedIn, userName, handleLogin, handleLogout } = useContext(AuthContext);
   const router = useRouter();
 
-  const onLoginClick = () => {
-    if (id === 'admin' && password === 'admin') {
-      handleLogin(id, password);
-      // 로그인 성공 후 바로 dashboard로 리다이렉트
+  const onLoginClick = async () => {
+    await handleLogin(email, password);
+    // handleLogin이 성공하면 isLoggedIn이 true가 되므로
+    // useEffect에서 리다이렉트 처리하거나 여기서 직접 처리
+    const expire = sessionStorage.getItem('login_expire');
+    if (expire && Date.now() < Number(expire)) {
       router.push('/dashboard');
-    } else {
-      handleLogin(id, password);
     }
   };
 
@@ -174,29 +218,29 @@ function HomeContent({
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} hideAuthButtons={true} />
 
       {/* 메인 섹션 - 모바일 최적화 */}
       <section className="max-w-md mx-auto px-4 py-8">
         <div className="space-y-8">
           {!isLoggedIn ? (
             <>
-              {/* 로그인 폼 - 로그인되지 않았을 때만 표시 */}
+              {/* 로그인 폼 - 이메일 기반 */}
               <div className="bg-white rounded-2xl shadow-lg p-8 h-fit">
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-slate-700 font-semibold mb-2">ID</label>
+                    <label className="block text-slate-700 font-semibold mb-2">이메일</label>
                     <input
-                      type="text"
-                      placeholder="아이디를 입력하세요"
-                      value={id}
-                      onChange={(e) => setId(e.target.value)}
+                      type="email"
+                      placeholder="이메일을 입력하세요"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-700 font-semibold mb-2">Password</label>
+                    <label className="block text-slate-700 font-semibold mb-2">비밀번호</label>
                     <input
                       type="password"
                       placeholder="비밀번호를 입력하세요"
