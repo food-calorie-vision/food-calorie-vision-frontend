@@ -46,18 +46,28 @@ export default function FoodImageAnalysisPage() {
 
   // 이미지 업로드 처리
   const handleImageUpload = (file: File) => {
+    console.log('📤 handleImageUpload 호출됨:', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    });
+    
     if (file && file.type.startsWith('image/')) {
       setUploadedImage(file);
+      console.log('✅ 이미지 상태 업데이트 완료');
       
       // 이미지 프리뷰 생성
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target?.result as string);
+        console.log('✅ 이미지 프리뷰 생성 완료');
       };
       reader.readAsDataURL(file);
       
       // 이전 분석 결과 초기화
       setAnalysisResult(null);
+    } else {
+      console.warn('⚠️ 유효하지 않은 이미지 파일:', file.type);
     }
   };
 
@@ -99,55 +109,74 @@ export default function FoodImageAnalysisPage() {
     }
   };
 
-  // AI 이미지 분석 시작
+  // AI 이미지 분석 시작 (YOLO + GPT-Vision + DB)
   const startAnalysis = async () => {
-    if (!uploadedImage) return;
+    console.log('🔔 startAnalysis 함수 호출됨!');
+    console.log('📸 uploadedImage 상태:', uploadedImage);
+    
+    if (!uploadedImage) {
+      console.warn('⚠️ 업로드된 이미지가 없습니다.');
+      alert('먼저 이미지를 업로드해주세요.');
+      return;
+    }
+
+    console.log('🚀 분석 시작:', {
+      fileName: uploadedImage.name,
+      fileSize: uploadedImage.size,
+      fileType: uploadedImage.type
+    });
 
     setIsAnalyzing(true);
     setAnalysisResult(null);
 
     try {
-      // 이미지를 Base64로 변환
-      const base64Image = await fileToBase64(uploadedImage);
+      // FormData 생성 (백엔드가 multipart/form-data를 기대함)
+      const formData = new FormData();
+      formData.append('file', uploadedImage);
 
-      // API 호출
-      const response = await fetch('/api/food-analysis', {
+      // 백엔드 API 직접 호출
+      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = `${apiEndpoint}/api/v1/food/analysis-upload`;
+      
+      console.log('📡 API 호출:', apiUrl);
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageData: base64Image,
-          fileName: uploadedImage.name,
-          fileSize: uploadedImage.size,
-          fileType: uploadedImage.type
-        }),
+        body: formData,
+        credentials: 'include', // 세션 쿠키 포함
       });
 
+      console.log('📥 응답 상태:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ 서버 응답 에러:', errorText);
+        throw new Error(`서버 오류 (${response.status}): ${errorText}`);
+      }
+
       const result = await response.json();
+      console.log('📦 응답 데이터:', result);
 
       if (result.success) {
         setAnalysisResult(result.data.analysis);
+        console.log('✅ 분석 완료:', result.data.analysis);
+        alert('분석이 완료되었습니다!');
       } else {
-        throw new Error(result.error || '분석 실패');
+        throw new Error(result.error || result.detail || result.message || '분석 실패');
       }
     } catch (error) {
-      console.error('이미지 분석 오류:', error);
-      alert('이미지 분석 중 오류가 발생했습니다. 다시 시도해 주세요.');
+      console.error('❌ 이미지 분석 오류:', error);
+      if (error instanceof Error) {
+        alert(`이미지 분석 중 오류가 발생했습니다:\n${error.message}`);
+      } else {
+        alert('이미지 분석 중 알 수 없는 오류가 발생했습니다.');
+      }
     } finally {
       setIsAnalyzing(false);
+      console.log('🏁 분석 종료');
     }
   };
 
-  // 파일을 Base64로 변환하는 헬퍼 함수
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = error => reject(error);
-    });
-  };
 
   // 식사 기록 저장
   const saveMealRecord = async () => {
@@ -281,7 +310,10 @@ export default function FoodImageAnalysisPage() {
             {/* 분석 시작 버튼 */}
             <div className="bg-white rounded-lg shadow-lg p-6">
               <button
-                onClick={startAnalysis}
+                onClick={() => {
+                  console.log('🖱️ 버튼 클릭됨!');
+                  startAnalysis();
+                }}
                 disabled={!uploadedImage || isAnalyzing}
                 className={`w-full py-4 px-6 rounded-lg font-semibold text-white transition-colors flex items-center justify-center ${
                   !uploadedImage || isAnalyzing
@@ -307,6 +339,11 @@ export default function FoodImageAnalysisPage() {
                   먼저 음식 이미지를 업로드해주세요
                 </p>
               )}
+              
+              {/* 디버깅 정보 */}
+              <div className="mt-2 text-xs text-gray-400 text-center">
+                디버그: uploadedImage = {uploadedImage ? '있음' : '없음'}, isAnalyzing = {isAnalyzing ? 'true' : 'false'}
+              </div>
             </div>
           </div>
 
@@ -321,15 +358,49 @@ export default function FoodImageAnalysisPage() {
                   <div className="p-4 bg-green-50 rounded-lg">
                     <h3 className="font-semibold text-green-800 mb-1">인식된 음식</h3>
                     <p className="text-2xl font-bold text-green-900">{analysisResult.foodName}</p>
-                    <p className="text-sm text-green-700">
+                    {analysisResult.description && (
+                      <p className="text-sm text-green-700 mt-1">{analysisResult.description}</p>
+                    )}
+                    <p className="text-sm text-green-700 mt-1">
                       신뢰도: {(analysisResult.confidence * 100).toFixed(1)}%
                     </p>
                   </div>
 
-                  {/* 칼로리 정보 */}
-                  <div className="p-4 bg-orange-50 rounded-lg">
-                    <h3 className="font-semibold text-orange-800 mb-2">칼로리 정보</h3>
-                    <p className="text-3xl font-bold text-orange-900">{analysisResult.calories} kcal</p>
+                  {/* 주요 재료 */}
+                  {analysisResult.ingredients && analysisResult.ingredients.length > 0 && (
+                    <div className="p-4 bg-yellow-50 rounded-lg">
+                      <h3 className="font-semibold text-yellow-800 mb-2">주요 재료</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {analysisResult.ingredients.map((ingredient, index) => (
+                          <span
+                            key={index}
+                            className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium"
+                          >
+                            {ingredient}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 칼로리 및 건강 점수 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-orange-50 rounded-lg">
+                      <h3 className="font-semibold text-orange-800 mb-1">칼로리</h3>
+                      <p className="text-2xl font-bold text-orange-900">{analysisResult.calories} kcal</p>
+                      {analysisResult.portionSize && (
+                        <p className="text-xs text-orange-700 mt-1">{analysisResult.portionSize}</p>
+                      )}
+                    </div>
+                    {analysisResult.healthScore !== undefined && (
+                      <div className="p-4 bg-indigo-50 rounded-lg">
+                        <h3 className="font-semibold text-indigo-800 mb-1">건강 점수</h3>
+                        <p className="text-2xl font-bold text-indigo-900">{analysisResult.healthScore}점</p>
+                        <p className="text-xs text-indigo-700 mt-1">
+                          {analysisResult.healthScore >= 75 ? '우수' : analysisResult.healthScore >= 50 ? '보통' : '개선 필요'}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* 영양 성분 */}
@@ -338,20 +409,26 @@ export default function FoodImageAnalysisPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="text-center">
                         <p className="text-sm text-blue-600">단백질</p>
-                        <p className="font-bold text-blue-900">{analysisResult.nutrients.protein}g</p>
+                        <p className="font-bold text-blue-900">{analysisResult.nutrients.protein.toFixed(1)}g</p>
                       </div>
                       <div className="text-center">
                         <p className="text-sm text-blue-600">탄수화물</p>
-                        <p className="font-bold text-blue-900">{analysisResult.nutrients.carbs}g</p>
+                        <p className="font-bold text-blue-900">{analysisResult.nutrients.carbs.toFixed(1)}g</p>
                       </div>
                       <div className="text-center">
                         <p className="text-sm text-blue-600">지방</p>
-                        <p className="font-bold text-blue-900">{analysisResult.nutrients.fat}g</p>
+                        <p className="font-bold text-blue-900">{analysisResult.nutrients.fat.toFixed(1)}g</p>
                       </div>
                       <div className="text-center">
                         <p className="text-sm text-blue-600">나트륨</p>
-                        <p className="font-bold text-blue-900">{analysisResult.nutrients.sodium}mg</p>
+                        <p className="font-bold text-blue-900">{analysisResult.nutrients.sodium.toFixed(1)}mg</p>
                       </div>
+                      {analysisResult.nutrients.fiber !== undefined && analysisResult.nutrients.fiber > 0 && (
+                        <div className="text-center col-span-2">
+                          <p className="text-sm text-blue-600">식이섬유</p>
+                          <p className="font-bold text-blue-900">{analysisResult.nutrients.fiber.toFixed(1)}g</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 

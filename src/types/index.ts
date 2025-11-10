@@ -151,16 +151,29 @@ export interface MealRecommendation {
   };
 }
 
+// 후보 음식 타입
+export interface FoodCandidate {
+  foodName: string;
+  confidence: number; // 0.0 ~ 1.0
+  description?: string;
+}
+
 // 음식 이미지 분석 결과 타입
 export interface FoodAnalysisResult {
   foodName: string;
+  description?: string; // 음식 설명
+  ingredients?: string[]; // 주요 재료 3-4개
   calories: number;
   nutrients: {
     protein: number;
     carbs: number;
     fat: number;
     sodium: number;
+    fiber?: number; // 식이섬유
   };
+  portionSize?: string; // 1회 제공량
+  healthScore?: number; // 건강 점수 (0-100)
   confidence: number;
   suggestions: string[];
+  candidates?: FoodCandidate[]; // 여러 후보 음식 리스트
 }
