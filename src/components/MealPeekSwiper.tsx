@@ -84,9 +84,8 @@ export default function MealPeekSwiper({
   const chooseName = (n: string) =>
     setPickedNameById((prev) => ({ ...prev, [current.id]: n }));
 
-  const confirmName = () => {
-    const chosen = pickedNameById[current.id] ?? nameCandidates[0] ?? null;
-    setPickedNameById((prev) => ({ ...prev, [current.id]: chosen }));
+  const confirmName = (name: string) => {
+    setPickedNameById((prev) => ({ ...prev, [current.id]: name }));
     setPhaseById((prev) => ({ ...prev, [current.id]: 'ingredients' }));
   };
 
@@ -112,10 +111,9 @@ export default function MealPeekSwiper({
       {/* 진행 표시 */}
       <div className="flex items-center justify-between mb-2 text-sm text-slate-500">
         <div>오늘의 식사일기 · {wrap(index, images.length) + 1} / {images.length}</div>
-        <div className="hidden md:block">←/→ 키로 이동, Enter로 확정</div>
       </div>
 
-      <div className="relative h-[420px] select-none">
+      <div className="relative h-[500px] select-none">
         {/* 뒤 카드 peek */}
         <div className="absolute inset-0 pointer-events-none">
           {peekItems.map((it, i) => (
@@ -150,10 +148,10 @@ export default function MealPeekSwiper({
             exit={{ x: -40, opacity: 0 }}
             transition={{ type: 'spring', bounce: 0.25, duration: 0.35 }}
             whileTap={{ scale: 0.98 }}
-            className="relative z-10 bg-white border border-slate-200 rounded-2xl shadow-md h-full overflow-hidden"
+            className="relative z-10 bg-white border border-slate-200 rounded-2xl shadow-md h-full overflow-hidden flex flex-col"
             style={{ touchAction: 'pan-y' }}  // 모바일 세로 스크롤 충돌 방지
           >
-            <div className="h-[62%] relative">
+            <div className="h-56 relative flex-shrink-0">
               <img src={current.url} alt="meal" className="w-full h-full object-cover" />
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={goPrev} className="px-3 py-1 rounded-lg bg-white/90 border text-sm">
@@ -166,7 +164,7 @@ export default function MealPeekSwiper({
             </div>
 
             {/* 하단 컨트롤 */}
-            <div className="h-[38%] p-4">
+            <div className="flex-1 p-4 overflow-y-auto">
               {!current.predictions && (
                 <div className="text-sm text-slate-500">
                   분석 결과가 아직 없습니다. 아래의 <b>식단 분석 시작</b> 버튼을 먼저 눌러주세요.
@@ -174,61 +172,103 @@ export default function MealPeekSwiper({
               )}
 
               {current.predictions && phase === 'name' && (
-                <div>
-                  <p className="text-sm text-slate-600 mb-2">이름 후보를 선택하세요</p>
-                  <div className="flex flex-wrap gap-2">
-                    {nameCandidates.map((n) => {
-                      const selected = (pickedNameById[current.id] ?? null) === n;
+                <div className="flex flex-col h-full">
+                  <div className="flex-shrink-0 mb-3">
+                    <p className="text-sm text-slate-600 mb-2">업로드한 음식은</p>
+                    <p className="text-lg font-bold text-slate-900">
+                      <span className="text-green-600">{nameCandidates[0]}</span> 인 것으로 보입니다.
+                    </p>
+                    {nameCandidates.length > 1 && (
+                      <p className="text-xs text-slate-500 mt-1">다른 후보를 선택하려면 아래에서 골라주세요</p>
+                    )}
+                  </div>
+                  <div className="space-y-2 overflow-y-auto flex-1 pr-1">
+                    {current.predictions.map((pred, idx) => {
+                      const selected = (pickedNameById[current.id] ?? null) === pred.name;
+                      const confidencePercent = (pred.confidence * 100).toFixed(0);
+                      const getConfidenceColor = (conf: number) => {
+                        if (conf >= 0.8) return 'text-green-600 bg-green-50 border-green-200';
+                        if (conf >= 0.6) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+                        return 'text-orange-600 bg-orange-50 border-orange-200';
+                      };
                       return (
                         <button
-                          key={n}
-                          onClick={() => chooseName(n)}
-                          className={`px-3 py-1 rounded-full border text-sm ${
-                            selected ? 'bg-black text-white border-black' : 'bg-white hover:bg-slate-50'
+                          key={pred.name}
+                          onClick={() => {
+                            chooseName(pred.name);
+                            confirmName(pred.name);
+                          }}
+                          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition ${
+                            idx === 0
+                              ? selected
+                                ? 'bg-green-500 text-white border-green-600 shadow-md'
+                                : 'bg-green-50 text-slate-700 border-green-300 hover:border-green-400'
+                              : selected 
+                                ? 'bg-green-500 text-white border-green-600 shadow-md' 
+                                : 'bg-white text-slate-700 border-slate-200 hover:border-green-300 active:bg-slate-50'
                           }`}
                         >
-                          {n}
+                          <div className="flex items-center gap-2">
+                            {idx === 0 && !selected && <span className="text-green-600 font-bold">1순위</span>}
+                            <span className={`font-medium text-base ${idx === 0 && !selected ? 'text-green-700' : ''}`}>
+                              {pred.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!selected && (
+                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                                idx === 0 ? 'text-green-700 bg-green-100 border-green-300' : getConfidenceColor(pred.confidence)
+                              }`}>
+                                정확도 {confidencePercent}%
+                              </span>
+                            )}
+                            {selected && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-medium opacity-90">{confidencePercent}%</span>
+                                <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center">
+                                  <span className="text-green-500 text-sm font-bold">✓</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </button>
                       );
                     })}
-                  </div>
-                  <div className="mt-3">
-                    <button
-                      onClick={confirmName}
-                      disabled={(pickedNameById[current.id] ?? nameCandidates[0] ?? null) === null}
-                      className="px-4 py-2 rounded-lg bg-black text-white text-sm disabled:opacity-40"
-                    >
-                      이름 확정
-                    </button>
                   </div>
                 </div>
               )}
 
               {current.predictions && phase === 'ingredients' && (
-                <div>
-                  <p className="text-sm text-slate-600 mb-2">재료 후보를 확인/선택하세요</p>
-                  <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col h-full">
+                  <div className="flex-shrink-0 mb-3">
+                    <p className="text-sm text-slate-600 mb-1">주재료는 아래와 같이 보입니다.</p>
+                    <p className="text-sm font-semibold text-slate-900">맞나요?</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 overflow-y-auto flex-1 pr-1 content-start">
                     {ingredientsCandidates.map((ing) => {
                       const selected = (pickedIngrById[current.id] ?? []).includes(ing);
                       return (
                         <button
                           key={ing}
                           onClick={() => toggleIngredient(ing)}
-                          className={`px-3 py-1 rounded-full border text-sm ${
-                            selected ? 'bg-black text-white border-black' : 'bg-white hover:bg-slate-50'
+                          className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${
+                            selected 
+                              ? 'bg-green-500 text-white border-green-600 shadow-sm' 
+                              : 'bg-white text-slate-700 border-slate-200 hover:border-green-300 active:bg-slate-50'
                           }`}
                         >
+                          {selected && <span className="mr-1">✓</span>}
                           {ing}
                         </button>
                       );
                     })}
                   </div>
-                  <div className="mt-3 flex justify-end">
+                  <div className="mt-4 flex-shrink-0">
                     <button
                       onClick={confirmIngredients}
-                      className="px-4 py-2 rounded-lg bg-black text-white text-sm"
+                      className="w-full px-4 py-3 rounded-xl bg-green-500 text-white font-semibold hover:bg-green-600 transition shadow-sm"
                     >
-                      재료 확정 → 다음
+                      완료 → 다음 사진
                     </button>
                   </div>
                 </div>

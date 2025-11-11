@@ -90,129 +90,147 @@ export default function IngredientPage() {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-8">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">식재료 입력</h2>
-        <p className="text-slate-600">
-          냉장고 속 식재료 이미지를 업로드하면 AI가 자동으로 인식해드립니다. (여러 이미지 동시 업로드 가능)
-        </p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50">
+      <div className="max-w-2xl mx-auto p-4 pb-8">
+        {/* 헤더 */}
+        <div className="mb-6 text-center">
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">
+            🥕 식재료 입력
+          </h2>
+          <p className="text-sm text-slate-600">
+            냉장고 속 식재료 이미지를 업로드하면 AI가 자동으로 인식해드립니다
+          </p>
+        </div>
 
-      {/* 이미지 업로드 영역 */}
-      <div className="mb-6">
-        <label
-          htmlFor="ingredient-upload"
-          className="block w-full border-2 border-dashed border-slate-300 rounded-xl p-12 text-center cursor-pointer hover:border-green-500 hover:bg-green-50 transition"
-        >
-          <div className="text-5xl mb-4">🥕</div>
-          <div className="text-slate-700 font-medium mb-2">식재료 이미지 업로드</div>
-          <div className="text-sm text-slate-500">여러 이미지를 한 번에 업로드할 수 있습니다</div>
-          <input
-            id="ingredient-upload"
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleImageUpload}
-            className="hidden"
-          />
-        </label>
-      </div>
-
-      {/* 업로드된 이미지 목록 */}
-      {images.length > 0 && (
+        {/* 이미지 업로드 영역 */}
         <div className="mb-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">
-            업로드된 이미지 ({images.length}개)
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {images.map((img) => (
-              <div key={img.id} className="border rounded-xl overflow-hidden">
-                <div className="relative">
-                  <img src={img.url} alt="식재료" className="w-full h-48 object-cover" />
-                  <button
-                    onClick={() => removeImage(img.id)}
-                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 transition"
-                  >
-                    ×
-                  </button>
-                </div>
+          <label
+            htmlFor="ingredient-upload"
+            className="block w-full border-2 border-dashed border-green-300 bg-white rounded-2xl p-10 text-center cursor-pointer hover:border-green-500 hover:bg-green-50/50 active:scale-[0.98] transition-all duration-200 shadow-sm"
+          >
+            <div className="text-5xl mb-4">🥕</div>
+            <div className="text-slate-800 font-semibold text-lg mb-1">식재료 이미지 업로드</div>
+            <div className="text-sm text-slate-500">여러 이미지를 한 번에 업로드할 수 있습니다</div>
+            <input
+              id="ingredient-upload"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+          </label>
+        </div>
 
-                {/* 분석 결과 */}
-                {img.predictions && (
-                  <div className="p-4 bg-slate-50">
-                    <div className="text-sm font-semibold text-slate-700 mb-3">인식된 식재료:</div>
-                    <div className="space-y-3">
-                      {img.predictions.map((pred) => (
-                        <div
-                          key={pred.name}
-                          className={`p-3 rounded-lg border-2 transition ${
-                            pred.selected
-                              ? 'bg-green-50 border-green-500'
-                              : 'bg-white border-slate-200 opacity-50'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium text-slate-800">{pred.name}</span>
-                            <button
-                              onClick={() => toggleIngredient(img.id, pred.name)}
-                              className={`w-6 h-6 rounded border-2 flex items-center justify-center transition ${
-                                pred.selected
-                                  ? 'bg-green-500 border-green-600'
-                                  : 'bg-white border-slate-300'
-                              }`}
-                            >
-                              {pred.selected && <span className="text-white text-sm">✓</span>}
-                            </button>
-                          </div>
+        {/* 업로드된 이미지 목록 */}
+        {images.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">
+              업로드된 이미지 ({images.length}개)
+            </h3>
+            <div className="grid grid-cols-1 gap-6">
+              {images.map((img) => (
+                <div key={img.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  <div className="relative">
+                    <img src={img.url} alt="식재료" className="w-full h-64 object-cover" />
+                    <button
+                      onClick={() => removeImage(img.id)}
+                      className="absolute top-3 right-3 bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center hover:bg-red-600 active:scale-95 transition-all shadow-lg"
+                    >
+                      ×
+                    </button>
+                  </div>
 
-                          {pred.selected && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-slate-600">수량:</span>
+                  {/* 분석 결과 */}
+                  {img.predictions && (
+                    <div className="p-6">
+                      <div className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                        <span className="text-lg">✨</span>
+                        인식된 식재료
+                      </div>
+                      <div className="space-y-3">
+                        {img.predictions.map((pred) => (
+                          <div
+                            key={pred.name}
+                            className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                              pred.selected
+                                ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-400 shadow-sm'
+                                : 'bg-slate-50 border-slate-200 opacity-60'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="font-semibold text-slate-800 text-lg">{pred.name}</span>
                               <button
-                                onClick={() => updateCount(img.id, pred.name, -1)}
-                                className="w-8 h-8 bg-slate-200 rounded-lg hover:bg-slate-300 transition font-bold"
+                                onClick={() => toggleIngredient(img.id, pred.name)}
+                                className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 ${
+                                  pred.selected
+                                    ? 'bg-green-500 border-green-600 shadow-sm'
+                                    : 'bg-white border-slate-300 hover:border-slate-400'
+                                }`}
                               >
-                                −
-                              </button>
-                              <span className="w-12 text-center font-semibold text-slate-800">
-                                {pred.count}
-                              </span>
-                              <button
-                                onClick={() => updateCount(img.id, pred.name, 1)}
-                                className="w-8 h-8 bg-slate-200 rounded-lg hover:bg-slate-300 transition font-bold"
-                              >
-                                +
+                                {pred.selected && <span className="text-white text-sm font-bold">✓</span>}
                               </button>
                             </div>
-                          )}
-                        </div>
-                      ))}
+
+                            {pred.selected && (
+                              <div className="flex items-center gap-3 bg-white/70 rounded-lg p-3">
+                                <span className="text-sm font-medium text-slate-600">수량:</span>
+                                <button
+                                  onClick={() => updateCount(img.id, pred.name, -1)}
+                                  className="w-9 h-9 bg-slate-200 rounded-xl hover:bg-slate-300 active:scale-95 transition-all font-bold text-slate-700"
+                                >
+                                  −
+                                </button>
+                                <span className="w-14 text-center font-bold text-slate-800 text-lg">
+                                  {pred.count}
+                                </span>
+                                <button
+                                  onClick={() => updateCount(img.id, pred.name, 1)}
+                                  className="w-9 h-9 bg-slate-200 rounded-xl hover:bg-slate-300 active:scale-95 transition-all font-bold text-slate-700"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 분석 버튼 */}
-      {images.length > 0 && !images[0].predictions && (
-        <button
-          onClick={handleAnalyze}
-          disabled={isAnalyzing}
-          className="w-full bg-green-500 text-white py-4 rounded-xl font-semibold hover:bg-green-600 transition disabled:bg-slate-300 disabled:cursor-not-allowed"
-        >
-          {isAnalyzing ? '분석 중...' : '식재료 분석 시작'}
-        </button>
-      )}
+        {/* 분석 버튼 */}
+        {images.length > 0 && !images[0].predictions && (
+          <button
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
+            className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-green-600 hover:to-green-700 active:scale-[0.98] transition-all duration-200 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed shadow-lg hover:shadow-xl disabled:shadow-none"
+          >
+            {isAnalyzing ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                분석 중...
+              </span>
+            ) : (
+              '🔍 식재료 분석 시작'
+            )}
+          </button>
+        )}
 
-      {/* 저장 버튼 */}
-      {images.length > 0 && images[0].predictions && (
-        <button className="w-full bg-blue-500 text-white py-4 rounded-xl font-semibold hover:bg-blue-600 transition">
-          선택한 식재료 저장하기
-        </button>
-      )}
+        {/* 저장 버튼 */}
+        {images.length > 0 && images[0].predictions && (
+          <button className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-blue-600 hover:to-blue-700 active:scale-[0.98] transition-all duration-200 shadow-lg hover:shadow-xl">
+            💾 선택한 식재료 저장하기
+          </button>
+        )}
+      </div>
     </div>
   );
 }
