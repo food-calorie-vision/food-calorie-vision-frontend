@@ -2,17 +2,33 @@
 
 import { useState } from 'react';
 import MealPeekSwiper from '@/components/MealPeekSwiper';
+import type { FoodAnalysisResult, FoodCandidate } from '@/types';
 
 type FoodPrediction = {
   name: string;
   confidence: number;
   selected: boolean;
+  description?: string;
+  ingredients?: string[];
+  calories?: number;
+  nutrients?: {
+    protein: number;
+    carbs: number;
+    fat: number;
+    sodium: number;
+    fiber?: number;
+  };
+  portionSize?: string;
+  healthScore?: number;
+  suggestions?: string[];
 };
 
 type UploadedImage = {
   id: string;
   url: string;
+  file?: File; // 실제 파일 객체 저장
   predictions?: FoodPrediction[];
+  isReanalyzing?: boolean; // 재분석 중 상태
 };
 
 export default function MealDiaryPage() {
@@ -24,6 +40,8 @@ export default function MealDiaryPage() {
   const [showModal, setShowModal] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
 
+  const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -34,6 +52,7 @@ export default function MealDiaryPage() {
         const newImage: UploadedImage = {
           id: Math.random().toString(36).substr(2, 9),
           url: event.target?.result as string,
+          file: file, // 실제 파일 객체 저장
         };
         setImages((prev) => [...prev, newImage]);
       };
@@ -41,25 +60,104 @@ export default function MealDiaryPage() {
     });
   };
 
-  const handleAnalyze = () => {
+  const handleDeleteImage = (imageId: string) => {
+    setImages((prev) => prev.filter((img) => img.id !== imageId));
+    setCompletedImages((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(imageId);
+      return newSet;
+    });
+  };
+
+  const handleAnalyze = async () => {
+    if (images.length === 0) return;
+
     setIsAnalyzing(true);
-    setCompletedImages(new Set()); // 분석 시작 시 초기화
-    
-    // 모의 비전 모델 분석 (2초 후 결과 표시)
-    setTimeout(() => {
-      setImages((prev) =>
-        prev.map((img) => ({
-          ...img,
-          predictions: [
-            { name: '김치찌개', confidence: 0.92, selected: true },
-            { name: '된장찌개', confidence: 0.78, selected: false },
-            { name: '순두부찌개', confidence: 0.65, selected: false },
-            { name: '부대찌개', confidence: 0.53, selected: false },
-          ],
-        }))
-      );
+    setCompletedImages(new Set());
+
+    try {
+      const analysisPromises = images.map(async (img) => {
+        if (!img.file) {
+          console.error('❌ 파일이 없습니다:', img.id);
+          return img;
+        }
+
+        const formData = new FormData();
+        formData.append('file', img.file);
+
+        try {
+          console.log('📤 백엔드로 이미지 전송 중...', img.id);
+          const response = await fetch(`${apiEndpoint}/api/v1/food/analysis-upload`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const result = await response.json();
+          console.log('✅ 백엔드 응답:', result);
+
+          if (result.success && result.data?.analysis) {
+            const analysis: FoodAnalysisResult = result.data.analysis;
+            const predictions: FoodPrediction[] = [];
+
+            // 후보 음식이 있으면 변환
+            if (analysis.candidates && analysis.candidates.length > 0) {
+              analysis.candidates.forEach((candidate: FoodCandidate, index: number) => {
+                predictions.push({
+                  name: candidate.foodName,
+                  confidence: candidate.confidence,
+                  selected: index === 0, // 첫 번째 후보만 선택
+                  description: candidate.description || '',
+                  // 첫 번째 후보만 전체 정보 포함
+                  ...(index === 0 && {
+                    ingredients: analysis.ingredients,
+                    calories: analysis.calories,
+                    nutrients: analysis.nutrients,
+                    portionSize: analysis.portionSize,
+                    healthScore: analysis.healthScore,
+                    suggestions: analysis.suggestions,
+                  }),
+                });
+              });
+            } else {
+              // 후보가 없으면 단일 결과로 처리
+              predictions.push({
+                name: analysis.foodName,
+                confidence: analysis.confidence,
+                selected: true,
+                description: analysis.description || '',
+                ingredients: analysis.ingredients,
+                calories: analysis.calories,
+                nutrients: analysis.nutrients,
+                portionSize: analysis.portionSize,
+                healthScore: analysis.healthScore,
+                suggestions: analysis.suggestions,
+              });
+            }
+
+            return { ...img, predictions };
+          } else {
+            console.error('❌ 분석 실패:', result.message || result.error);
+            return img;
+          }
+        } catch (error) {
+          console.error('❌ 이미지 분석 오류:', error);
+          return img;
+        }
+      });
+
+      const analyzedImages = await Promise.all(analysisPromises);
+      setImages(analyzedImages);
+    } catch (error) {
+      console.error('❌ 전체 분석 오류:', error);
+      setModalMessage('분석 중 오류가 발생했습니다.\n다시 시도해주세요.');
+      setShowModal(true);
+    } finally {
       setIsAnalyzing(false);
-    }, 2000);
+    }
   };
 
 
@@ -92,23 +190,31 @@ export default function MealDiaryPage() {
         </label>
       </div>
 
-    {/* 스와이프 영역 */}
-    {images.length > 0 && (
-      <div
-        className={`transition-all duration-300 ${
-          showError ? 'border-4 border-red-500 rounded-2xl p-2' : ''
-        } ${isShaking ? 'animate-shake' : ''}`}
-      >
-        <MealPeekSwiper
-          images={images}
-          onConfirmItem={(r) => {
-            console.log('확정 결과', r);
-            setCompletedImages((prev) => new Set(prev).add(r.id));
-            // TODO: 서버에 저장하는 로직 추가
-          }}
-        />
-      </div>
-    )}
+      {/* 스와이프 영역 */}
+      {images.length > 0 && (
+        <div
+          className={`transition-all duration-300 ${
+            showError ? 'border-4 border-red-500 rounded-2xl p-2' : ''
+          } ${isShaking ? 'animate-shake' : ''}`}
+        >
+          <MealPeekSwiper
+            images={images.map((img) => ({
+              ...img,
+              predictions: img.predictions?.map((pred) => ({
+                name: pred.name,
+                confidence: pred.confidence,
+                selected: pred.selected,
+                ingredients: pred.ingredients, // GPT Vision이 추출한 재료 전달
+              })),
+            }))}
+            onConfirmItem={(r) => {
+              console.log('확정 결과', r);
+              setCompletedImages((prev) => new Set(prev).add(r.id));
+            }}
+            onDeleteImage={handleDeleteImage}
+          />
+        </div>
+      )}
 
       {/* 분석 버튼 */}
       {images.length > 0 && !images[0].predictions && (
@@ -130,16 +236,18 @@ export default function MealDiaryPage() {
               if (incompleteCount > 0) {
                 setShowError(true);
                 setIsShaking(true);
-                
+
                 // 모달 팝업 표시
-                setModalMessage(`아직 선택하지 않은 음식이 ${incompleteCount}개 있어요.\n모든 음식을 선택해주세요!`);
+                setModalMessage(
+                  `아직 선택하지 않은 음식이 ${incompleteCount}개 있어요.\n모든 음식을 선택해주세요!`
+                );
                 setShowModal(true);
-                
+
                 // 흔들림 애니메이션 종료
                 setTimeout(() => {
                   setIsShaking(false);
                 }, 600);
-                
+
                 // 빨간 테두리 제거
                 setTimeout(() => {
                   setShowError(false);
@@ -155,21 +263,21 @@ export default function MealDiaryPage() {
           >
             선택한 음식 저장하기
           </button>
-          
+
           {/* 진행 상황 표시 */}
           <div className="mt-3 text-center text-sm text-slate-600">
             {completedImages.size} / {images.length} 개 완료
           </div>
         </>
       )}
-      
+
       {/* 커스텀 모달 */}
       {showModal && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={() => setShowModal(false)}
         >
-          <div 
+          <div
             className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-modal"
             onClick={(e) => e.stopPropagation()}
           >
@@ -190,13 +298,27 @@ export default function MealDiaryPage() {
           </div>
         </div>
       )}
-      
+
       {/* 애니메이션 CSS */}
       <style jsx>{`
         @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-          20%, 40%, 60%, 80% { transform: translateX(5px); }
+          0%,
+          100% {
+            transform: translateX(0);
+          }
+          10%,
+          30%,
+          50%,
+          70%,
+          90% {
+            transform: translateX(-5px);
+          }
+          20%,
+          40%,
+          60%,
+          80% {
+            transform: translateX(5px);
+          }
         }
         .animate-shake {
           animation: shake 0.6s ease-in-out;

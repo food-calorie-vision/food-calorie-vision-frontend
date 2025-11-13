@@ -7,6 +7,7 @@ type FoodPrediction = {
   name: string;
   confidence: number;
   selected: boolean;
+  ingredients?: string[]; // GPT Vision이 추출한 실제 재료
 };
 
 type UploadedImage = {
@@ -21,23 +22,17 @@ type Props = {
   images: UploadedImage[];
   autoSwipeDelayMs?: number;
   onConfirmItem?: (r: { id: string; name: string | null; ingredients: string[] }) => void;
+  onDeleteImage?: (imageId: string) => void; // 이미지 삭제 콜백
 };
 
 // 인덱스 순환 헬퍼
 const wrap = (i: number, len: number) => ((i % len) + len) % len;
 
-const INGREDIENT_PRESETS: Record<string, string[]> = {
-  김치찌개: ['김치', '돼지고기', '두부', '대파', '마늘'],
-  된장찌개: ['된장', '두부', '애호박', '감자', '대파'],
-  순두부찌개: ['순두부', '계란', '대파', '고춧가루'],
-  부대찌개: ['햄', '소세지', '김치', '콩', '라면사리'],
-};
-const DEFAULT_INGREDIENTS = ['밥', '김치', '계란', '파'];
-
 export default function MealPeekSwiper({
   images,
   autoSwipeDelayMs = 700,
   onConfirmItem,
+  onDeleteImage,
 }: Props) {
   const [index, setIndex] = useState(0);
   const [phaseById, setPhaseById] = useState<Record<string, Phase>>({});
@@ -76,10 +71,13 @@ export default function MealPeekSwiper({
   );
 
   const ingredientsCandidates = useMemo<string[]>(() => {
-    const chosen = pickedNameById[current.id] ?? nameCandidates[0];
-    if (!chosen) return DEFAULT_INGREDIENTS;
-    return INGREDIENT_PRESETS[chosen] ?? DEFAULT_INGREDIENTS;
-  }, [current.id, nameCandidates, pickedNameById]);
+    // 선택된 음식의 실제 재료 가져오기 (GPT Vision 추출)
+    const chosenName = pickedNameById[current.id] ?? nameCandidates[0];
+    if (!chosenName) return [];
+    
+    const selectedPrediction = current.predictions?.find((p) => p.name === chosenName);
+    return selectedPrediction?.ingredients ?? [];
+  }, [current.id, current.predictions, nameCandidates, pickedNameById]);
 
   const chooseName = (n: string) =>
     setPickedNameById((prev) => ({ ...prev, [current.id]: n }));
@@ -103,49 +101,64 @@ export default function MealPeekSwiper({
       name: pickedNameById[current.id] ?? nameCandidates[0] ?? null,
       ingredients: pickedIngrById[current.id] ?? [],
     });
-    setTimeout(() => goNext(), autoSwipeDelayMs); // 루프 자동 전환
+    
+    // 다중 이미지인 경우에만 자동으로 다음 이미지로 전환
+    if (images.length > 1) {
+      setTimeout(() => goNext(), autoSwipeDelayMs);
+    }
+  };
+
+  const goBackToNameSelection = () => {
+    setPhaseById((prev) => ({ ...prev, [current.id]: 'name' }));
+    setPickedIngrById((prev) => ({ ...prev, [current.id]: [] })); // 재료 선택 초기화
   };
 
   return (
     <div className="w-full max-w-3xl mx-auto mb-8">
-      {/* 진행 표시 */}
-      <div className="flex items-center justify-between mb-2 text-sm text-slate-500">
-        <div>오늘의 식사일기 · {wrap(index, images.length) + 1} / {images.length}</div>
-      </div>
+      {/* 진행 표시 - 다중 이미지일 때만 표시 */}
+      {images.length > 1 && (
+        <div className="flex items-center justify-between mb-2 text-sm text-slate-500">
+          <div>오늘의 식사일기 · {wrap(index, images.length) + 1} / {images.length}</div>
+        </div>
+      )}
 
       <div className="relative h-[500px] select-none">
-        {/* 뒤 카드 peek */}
-        <div className="absolute inset-0 pointer-events-none">
-          {peekItems.map((it, i) => (
-            <div
-              key={it.id}
-              className="absolute top-5 right-5 overflow-hidden rounded-2xl shadow"
-              style={{
-                transform: `translateX(${i * 26}px) translateY(${i * 8}px) scale(${0.96 - i * 0.06})`,
-                opacity: 0.35 - i * 0.07,
-                width: '75%',
-                height: '80%',
-                background: '#f5f5f5',
-              }}
-            >
-              <img src={it.url} alt="" className="w-full h-full object-cover" />
-            </div>
-          ))}
-        </div>
+        {/* 뒤 카드 peek - 다중 이미지일 때만 표시 */}
+        {images.length > 1 && (
+          <div className="absolute inset-0 pointer-events-none">
+            {peekItems.map((it, i) => (
+              <div
+                key={it.id}
+                className="absolute top-5 right-5 overflow-hidden rounded-2xl shadow"
+                style={{
+                  transform: `translateX(${i * 26}px) translateY(${i * 8}px) scale(${0.96 - i * 0.06})`,
+                  opacity: 0.35 - i * 0.07,
+                  width: '75%',
+                  height: '80%',
+                  background: '#f5f5f5',
+                }}
+              >
+                <img src={it.url} alt="" className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* 메인 카드 */}
         <AnimatePresence mode="popLayout">
           <motion.div
             key={current.id}
-            drag="x"
+            drag={images.length > 1 ? "x" : false} // 단일 이미지일 때는 드래그 비활성화
             dragConstraints={{ left: 0, right: 0 }}
             onDragEnd={(_, info) => {
-              if (info.offset.x < -80) goNext();
-              else if (info.offset.x > 80) goPrev();
+              if (images.length > 1) {
+                if (info.offset.x < -80) goNext();
+                else if (info.offset.x > 80) goPrev();
+              }
             }}
-            initial={{ x: 40, opacity: 0 }}
+            initial={{ x: images.length > 1 ? 40 : 0, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -40, opacity: 0 }}
+            exit={{ x: images.length > 1 ? -40 : 0, opacity: 0 }}
             transition={{ type: 'spring', bounce: 0.25, duration: 0.35 }}
             whileTap={{ scale: 0.98 }}
             className="relative z-10 bg-white border border-slate-200 rounded-2xl shadow-md h-full overflow-hidden flex flex-col"
@@ -153,14 +166,35 @@ export default function MealPeekSwiper({
           >
             <div className="h-56 relative flex-shrink-0">
               <img src={current.url} alt="meal" className="w-full h-full object-cover" />
-              <div className="absolute bottom-3 right-3 flex gap-2">
-                <button onClick={goPrev} className="px-3 py-1 rounded-lg bg-white/90 border text-sm">
-                  이전
+              
+              {/* 삭제 버튼 - 우측 상단 */}
+              {onDeleteImage && (
+                <button
+                  onClick={() => {
+                    onDeleteImage(current.id);
+                    // 삭제 후 이미지가 남아있으면 다음 이미지로 이동
+                    if (images.length > 1) {
+                      goNext();
+                    }
+                  }}
+                  className="absolute top-3 right-3 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg hover:bg-red-600 transition z-20"
+                  aria-label="이미지 삭제"
+                >
+                  <span className="text-lg font-bold">×</span>
                 </button>
-                <button onClick={goNext} className="px-3 py-1 rounded-lg bg-white/90 border text-sm">
-                  다음
-                </button>
-              </div>
+              )}
+              
+              {/* 이전/다음 버튼 - 다중 이미지일 때만 표시 */}
+              {images.length > 1 && (
+                <div className="absolute bottom-3 right-3 flex gap-2">
+                  <button onClick={goPrev} className="px-3 py-1 rounded-lg bg-white/90 border text-sm">
+                    이전
+                  </button>
+                  <button onClick={goNext} className="px-3 py-1 rounded-lg bg-white/90 border text-sm">
+                    다음
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 하단 컨트롤 */}
@@ -241,8 +275,23 @@ export default function MealPeekSwiper({
               {current.predictions && phase === 'ingredients' && (
                 <div className="flex flex-col h-full">
                   <div className="flex-shrink-0 mb-3">
-                    <p className="text-sm text-slate-600 mb-1">주재료는 아래와 같이 보입니다.</p>
-                    <p className="text-sm font-semibold text-slate-900">맞나요?</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm text-slate-600 mb-1">주재료는 아래와 같이 보입니다.</p>
+                        <p className="text-sm font-semibold text-slate-900">맞나요?</p>
+                      </div>
+                      <button
+                        onClick={goBackToNameSelection}
+                        className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200 transition flex items-center gap-1"
+                      >
+                        <span>←</span> 음식 다시 선택
+                      </button>
+                    </div>
+                    {ingredientsCandidates.length === 0 && (
+                      <p className="text-xs text-orange-600 bg-orange-50 px-3 py-2 rounded-lg border border-orange-200 mt-2">
+                        ⚠️ 재료 정보가 없습니다. 음식을 다시 선택하거나 분석을 다시 시도해주세요.
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2 overflow-y-auto flex-1 pr-1 content-start">
                     {ingredientsCandidates.map((ing) => {
@@ -263,19 +312,22 @@ export default function MealPeekSwiper({
                       );
                     })}
                   </div>
-                  <div className="mt-4 flex-shrink-0">
+                  <div className="mt-4 flex-shrink-0 space-y-2">
                     <button
                       onClick={confirmIngredients}
-                      className="w-full px-4 py-3 rounded-xl bg-green-500 text-white font-semibold hover:bg-green-600 transition shadow-sm"
+                      disabled={ingredientsCandidates.length === 0}
+                      className="w-full px-4 py-3 rounded-xl bg-green-500 text-white font-semibold hover:bg-green-600 transition shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed"
                     >
-                      완료 → 다음 사진
+                      {images.length > 1 ? '완료 → 다음 사진' : '완료'}
                     </button>
                   </div>
                 </div>
               )}
 
               {current.predictions && phase === 'done' && (
-                <div className="text-sm text-slate-500">확인 완료! 다음 사진으로 이동합니다…</div>
+                <div className="text-sm text-slate-500">
+                  {images.length > 1 ? '확인 완료! 다음 사진으로 이동합니다…' : '확인 완료! ✅'}
+                </div>
               )}
             </div>
           </motion.div>
