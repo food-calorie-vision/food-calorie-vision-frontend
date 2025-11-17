@@ -57,29 +57,32 @@ export default function MealPeekSwiper({
   const hasItems = images.length > 0;
   const current = hasItems ? images[wrap(index, images.length)] : undefined;
 
-  // ✅ 안전 가드: current가 없으면 아무것도 렌더하지 않음
-  if (!hasItems || !current) return null;
-
+  // 모든 React Hooks를 조건문/early return 전에 호출
   const peekItems = useMemo(() => {
+    if (!hasItems) return [];
     const n = Math.min(3, Math.max(0, images.length - 1));
     return Array.from({ length: n }, (_, k) => images[wrap(index + 1 + k, images.length)]);
-  }, [images, index]);
+  }, [images, index, hasItems]);
+
+  const nameCandidates = useMemo<string[]>(
+    () => (current?.predictions ? current.predictions.map((p) => p.name) : []),
+    [current]
+  );
+
+  const ingredientsCandidates = useMemo<string[]>(() => {
+    if (!current) return DEFAULT_INGREDIENTS;
+    const chosen = pickedNameById[current.id] ?? nameCandidates[0];
+    if (!chosen) return DEFAULT_INGREDIENTS;
+    return INGREDIENT_PRESETS[chosen] ?? DEFAULT_INGREDIENTS;
+  }, [current, nameCandidates, pickedNameById]);
+
+  // ✅ 안전 가드: current가 없으면 아무것도 렌더하지 않음 (모든 Hooks 호출 후)
+  if (!hasItems || !current) return null;
 
   const goNext = () => setIndex((i) => wrap(i + 1, images.length));
   const goPrev = () => setIndex((i) => wrap(i - 1, images.length));
 
   const phase: Phase = phaseById[current.id] ?? 'name';
-
-  const nameCandidates = useMemo<string[]>(
-    () => (current.predictions ? current.predictions.map((p) => p.name) : []),
-    [current]
-  );
-
-  const ingredientsCandidates = useMemo<string[]>(() => {
-    const chosen = pickedNameById[current.id] ?? nameCandidates[0];
-    if (!chosen) return DEFAULT_INGREDIENTS;
-    return INGREDIENT_PRESETS[chosen] ?? DEFAULT_INGREDIENTS;
-  }, [current.id, nameCandidates, pickedNameById]);
 
   const chooseName = (n: string) =>
     setPickedNameById((prev) => ({ ...prev, [current.id]: n }));
