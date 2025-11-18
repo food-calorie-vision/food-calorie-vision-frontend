@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import MealPeekSwiper from '@/components/MealPeekSwiper';
 
 type FoodPrediction = {
@@ -32,6 +33,7 @@ type UploadedImage = {
 };
 
 export default function MealDiaryPage() {
+  const router = useRouter();
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [completedImages, setCompletedImages] = useState<Set<string>>(new Set());
@@ -39,6 +41,42 @@ export default function MealDiaryPage() {
   const [isShaking, setIsShaking] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [userId, setUserId] = useState<number | null>(null);
+
+  const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+  // 사용자 정보 가져오기
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user_id) {
+            setUserId(data.user_id);
+          }
+        }
+      } catch (error) {
+        console.error('사용자 정보 가져오기 실패:', error);
+      }
+    };
+    
+    fetchUserInfo();
+  }, [apiEndpoint]);
+
+  const handleDeleteImage = (imageId: string) => {
+    setImages((prev) => prev.filter((img) => img.id !== imageId));
+    setCompletedImages((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(imageId);
+      return newSet;
+    });
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -114,9 +152,9 @@ export default function MealDiaryPage() {
                   confidence: candidate.confidence,
                   selected: index === 0, // 첫 번째만 선택
                   description: candidate.description || '',
-                  // 첫 번째 후보만 상세 정보 포함
+                  ingredients: candidate.ingredients || [], // 각 후보의 재료 포함!
+                  // 첫 번째 후보만 전체 영양소 정보 포함
                   ...(index === 0 && {
-                    ingredients: analysis.ingredients,
                     calories: analysis.calories,
                     nutrients: analysis.nutrients,
                     portionSize: analysis.portionSize,
@@ -179,105 +217,210 @@ export default function MealDiaryPage() {
     }
   };
 
+  const handleSaveAllFoods = async () => {
+    if (!userId) {
+      setModalMessage('⚠️ 로그인이 필요합니다.');
+      setShowModal(true);
+      return;
+    }
+
+    setIsSaving(true);
+    
+    try {
+      const savePromises = images.map(async (img) => {
+        // 선택된 prediction 찾기
+        const selectedPrediction = img.predictions?.find(p => p.selected);
+        
+        if (!selectedPrediction) {
+          console.warn(`이미지 ${img.id}에 선택된 음식이 없습니다.`);
+          return { success: false, imageId: img.id };
+        }
+
+        // 음식 저장 API 호출
+        try {
+          const response = await fetch(`${apiEndpoint}/api/v1/food/save-food`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              userId: userId,
+              foodName: selectedPrediction.name,
+              ingredients: selectedPrediction.ingredients || [],
+              portionSizeG: 100, // 기본값 (나중에 사용자 입력으로 변경 가능)
+              // imageRef: null로 설정 (Base64는 너무 커서 DB에 저장 불가)
+              // TODO: 추후 S3/CloudFlare 등 파일 스토리지 연동 시 URL 저장
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const result = await response.json();
+          console.log(`✅ 음식 저장 성공 (${img.id}):`, result);
+          
+          return { success: true, imageId: img.id, data: result };
+        } catch (error) {
+          console.error(`❌ 음식 저장 실패 (${img.id}):`, error);
+          return { success: false, imageId: img.id, error };
+        }
+      });
+
+      const results = await Promise.all(savePromises);
+      
+      // 결과 확인
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+      
+      if (failCount === 0) {
+        setModalMessage(`🎉 모든 음식이 성공적으로 저장되었습니다!\n(${successCount}개 저장)`);
+        setShowModal(true);
+        
+        // 3초 후 대시보드로 이동
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 3000);
+      } else {
+        setModalMessage(`⚠️ 일부 음식 저장에 실패했습니다.\n성공: ${successCount}개, 실패: ${failCount}개`);
+        setShowModal(true);
+      }
+    } catch (error) {
+      console.error('❌ 음식 저장 중 오류:', error);
+      setModalMessage('❌ 음식 저장 중 오류가 발생했습니다.');
+      setShowModal(true);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50">
-      <div 
-        className={`max-w-2xl mx-auto p-4 pb-8 transition-all duration-300 ${
-          showError ? 'ring-8 ring-red-500/50 rounded-3xl' : ''
-        } ${isShaking ? 'animate-shake' : ''}`}
-      >
-        {/* 헤더 */}
-        <div className="mb-6 text-center">
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">
-            🍽️ 식단 분석
-          </h2>
-          <p className="text-sm text-slate-600">
-            음식 이미지를 업로드하면 AI가 자동으로 분석해드립니다
-          </p>
+    <div className="bg-white rounded-xl shadow-sm p-4">
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-slate-900 mb-2">식단 분석</h2>
+        <p className="text-sm text-slate-600">
+          음식 이미지를 업로드하면 AI가 자동으로 분석해드립니다.
+        </p>
+      </div>
+
+      {/* 이미지 업로드 영역 - 모바일 최적화 */}
+      <div className="mb-4">
+        <label
+          htmlFor="meal-upload"
+          className="block w-full border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer active:border-green-500 active:bg-green-50 transition"
+        >
+          <div className="text-4xl mb-3">📸</div>
+          <div className="text-slate-700 font-medium mb-1">이미지 업로드</div>
+          <div className="text-xs text-slate-500">터치하여 이미지를 추가하세요</div>
+          <input
+            id="meal-upload"
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+        </label>
+      </div>
+
+      {/* 스와이프 영역 */}
+      {images.length > 0 && (
+        <div
+          className={`transition-all duration-300 ${
+            showError ? 'border-4 border-red-500 rounded-2xl p-2' : ''
+          } ${isShaking ? 'animate-shake' : ''}`}
+        >
+          <MealPeekSwiper
+            images={images.map((img) => ({
+              ...img,
+              predictions: img.predictions?.map((pred) => ({
+                name: pred.name,
+                confidence: pred.confidence,
+                selected: pred.selected,
+                ingredients: pred.ingredients, // GPT Vision이 추출한 재료 전달
+              })),
+            }))}
+            onConfirmItem={async (r) => {
+              console.log('확정 결과', r);
+              
+              // 선택한 음식명이 1순위가 아닌 경우, API 재호출
+              const targetImage = images.find(img => img.id === r.id);
+              const firstCandidateName = targetImage?.predictions?.[0]?.name;
+              
+              if (r.name && r.name !== firstCandidateName) {
+                console.log(`🔄 사용자가 다른 후보를 선택했습니다: ${r.name}`);
+                
+                try {
+                  const response = await fetch(`${apiEndpoint}/api/v1/food/reanalyze-with-selection`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      selectedFoodName: r.name,
+                      ingredients: r.ingredients,
+                    }),
+                  });
+                  
+                  if (response.ok) {
+                    const result = await response.json();
+                    console.log('✅ 재분석 완료:', result);
+                    
+                    // 이미지 predictions 업데이트
+                    if (result.success && result.data?.analysis) {
+                      const analysis = result.data.analysis;
+                      setImages(prev => prev.map(img => {
+                        if (img.id === r.id) {
+                          return {
+                            ...img,
+                            predictions: img.predictions?.map(pred => {
+                              if (pred.name === r.name) {
+                                // 선택한 후보에 영양소 정보 업데이트
+                                return {
+                                  ...pred,
+                                  selected: true,
+                                  calories: analysis.calories,
+                                  nutrients: analysis.nutrients,
+                                  portionSize: analysis.portionSize,
+                                  healthScore: analysis.healthScore,
+                                  suggestions: analysis.suggestions,
+                                };
+                              }
+                              return { ...pred, selected: false };
+                            }),
+                          };
+                        }
+                        return img;
+                      }));
+                    }
+                  }
+                } catch (error) {
+                  console.error('❌ 재분석 실패:', error);
+                }
+              }
+              
+              setCompletedImages((prev) => new Set(prev).add(r.id));
+            }}
+          />
         </div>
+      )}
 
-        {/* 이미지 업로드 영역 */}
-        <div className="mb-6">
-          <label
-            htmlFor="meal-upload"
-            className={`block w-full border-2 border-dashed bg-white rounded-2xl p-10 text-center cursor-pointer active:scale-[0.98] transition-all duration-200 shadow-sm ${
-              showError 
-                ? 'border-red-500 bg-red-50/50 hover:border-red-600' 
-                : 'border-green-300 hover:border-green-500 hover:bg-green-50/50'
-            }`}
-          >
-            <div className="text-5xl mb-4">📸</div>
-            <div className="text-slate-800 font-semibold text-lg mb-1">이미지 업로드</div>
-            <div className="text-sm text-slate-500">터치하여 이미지를 추가하세요</div>
-            <input
-              id="meal-upload"
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleImageUpload}
-              className="hidden"
-            />
-          </label>
-        </div>
+      {/* 분석 버튼 */}
+      {images.length > 0 && !images[0].predictions && (
+        <button
+          onClick={handleAnalyze}
+          disabled={isAnalyzing}
+          className="w-full bg-green-500 text-white py-4 rounded-xl font-semibold hover:bg-green-600 transition disabled:bg-slate-300 disabled:cursor-not-allowed"
+        >
+          {isAnalyzing ? '분석 중...' : '식단 분석 시작'}
+        </button>
+      )}
 
-        {/* 진행 상황 바 */}
-        {images.length > 0 && images[0].predictions && (
-          <div className="mb-6 bg-white rounded-xl p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-slate-700">진행 상황</span>
-              <span className="text-sm font-bold text-green-600">
-                {completedImages.size} / {images.length}
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
-              <div
-                className="bg-gradient-to-r from-green-500 to-green-600 h-full rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${(completedImages.size / images.length) * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* 스와이프 영역 */}
-        {images.length > 0 && (
-          <div
-            className={`transition-all duration-300 ${
-              showError ? 'ring-4 ring-red-500 rounded-2xl' : ''
-            } ${isShaking ? 'animate-shake' : ''}`}
-          >
-            <MealPeekSwiper
-              images={images}
-              onConfirmItem={(r) => {
-                console.log('✅ 확정 결과:', r);
-                setCompletedImages((prev) => new Set(prev).add(r.id));
-              }}
-            />
-          </div>
-        )}
-
-        {/* 분석 버튼 */}
-        {images.length > 0 && !images[0].predictions && (
-          <button
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-green-600 hover:to-green-700 active:scale-[0.98] transition-all duration-200 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed shadow-lg hover:shadow-xl disabled:shadow-none"
-          >
-            {isAnalyzing ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                분석 중...
-              </span>
-            ) : (
-              '🔍 식단 분석 시작'
-            )}
-          </button>
-        )}
-
-        {/* 저장 버튼 */}
-        {images.length > 0 && images[0].predictions && (
+      {/* 저장 버튼 */}
+      {images.length > 0 && images[0].predictions && (
+        <>
           <button
             onClick={() => {
               const incompleteCount = images.length - completedImages.size;
@@ -291,16 +434,22 @@ export default function MealDiaryPage() {
                 setTimeout(() => setIsShaking(false), 600);
                 setTimeout(() => setShowError(false), 2000);
               } else {
-                setModalMessage('음식이 성공적으로 저장되었습니다! 🎉');
-                setShowModal(true);
-                // TODO: 실제 저장 로직 추가
+                // 모두 완료됨 - 저장 처리
+                handleSaveAllFoods();
               }
             }}
-            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-blue-600 hover:to-blue-700 active:scale-[0.98] transition-all duration-200 shadow-lg hover:shadow-xl"
+            disabled={isSaving}
+            className="w-full bg-blue-500 text-white py-4 rounded-xl font-semibold hover:bg-blue-600 transition shadow-md disabled:bg-slate-300 disabled:cursor-not-allowed"
           >
-            💾 선택한 음식 저장하기
+            {isSaving ? '저장 중...' : '선택한 음식 저장하기'}
           </button>
-        )}
+
+          {/* 진행 상황 표시 */}
+          <div className="mt-3 text-center text-sm text-slate-600">
+            {completedImages.size} / {images.length} 개 완료
+          </div>
+        </>
+      )}
 
         {/* 모달 팝업 */}
         {showModal && (
