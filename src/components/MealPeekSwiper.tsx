@@ -22,23 +22,17 @@ type Props = {
   images: UploadedImage[];
   autoSwipeDelayMs?: number;
   onConfirmItem?: (r: { id: string; name: string | null; ingredients: string[] }) => void;
+  onDeleteImage?: (imageId: string) => void; // 이미지 삭제 콜백
 };
 
 // 인덱스 순환 헬퍼
 const wrap = (i: number, len: number) => ((i % len) + len) % len;
 
-const INGREDIENT_PRESETS: Record<string, string[]> = {
-  김치찌개: ['김치', '돼지고기', '두부', '대파', '마늘'],
-  된장찌개: ['된장', '두부', '애호박', '감자', '대파'],
-  순두부찌개: ['순두부', '계란', '대파', '고춧가루'],
-  부대찌개: ['햄', '소세지', '김치', '콩', '라면사리'],
-};
-const DEFAULT_INGREDIENTS = ['밥', '김치', '계란', '파'];
-
 export default function MealPeekSwiper({
   images,
   autoSwipeDelayMs = 700,
   onConfirmItem,
+  onDeleteImage,
 }: Props) {
   const [index, setIndex] = useState(0);
   const [phaseById, setPhaseById] = useState<Record<string, Phase>>({});
@@ -58,21 +52,15 @@ export default function MealPeekSwiper({
   const hasItems = images.length > 0;
   const current = hasItems ? images[wrap(index, images.length)] : undefined;
 
-  // ✅ 안전 가드: current가 없으면 아무것도 렌더하지 않음
-  if (!hasItems || !current) return null;
-
+  // 모든 React Hooks를 조건문/early return 전에 호출
   const peekItems = useMemo(() => {
+    if (!hasItems) return [];
     const n = Math.min(3, Math.max(0, images.length - 1));
     return Array.from({ length: n }, (_, k) => images[wrap(index + 1 + k, images.length)]);
-  }, [images, index]);
-
-  const goNext = () => setIndex((i) => wrap(i + 1, images.length));
-  const goPrev = () => setIndex((i) => wrap(i - 1, images.length));
-
-  const phase: Phase = phaseById[current.id] ?? 'name';
+  }, [images, index, hasItems]);
 
   const nameCandidates = useMemo<string[]>(
-    () => (current.predictions ? current.predictions.map((p) => p.name) : []),
+    () => (current?.predictions ? current.predictions.map((p) => p.name) : []),
     [current]
   );
 
@@ -112,7 +100,16 @@ export default function MealPeekSwiper({
       name: pickedNameById[current.id] ?? nameCandidates[0] ?? null,
       ingredients: pickedIngrById[current.id] ?? [],
     });
-    setTimeout(() => goNext(), autoSwipeDelayMs); // 루프 자동 전환
+    
+    // 다중 이미지인 경우에만 자동으로 다음 이미지로 전환
+    if (images.length > 1) {
+      setTimeout(() => goNext(), autoSwipeDelayMs);
+    }
+  };
+
+  const goBackToNameSelection = () => {
+    setPhaseById((prev) => ({ ...prev, [current.id]: 'name' }));
+    setPickedIngrById((prev) => ({ ...prev, [current.id]: [] })); // 재료 선택 초기화
   };
 
   return (
@@ -141,20 +138,45 @@ export default function MealPeekSwiper({
             </div>
           ))}
         </div>
+      )}
+
+      <div className="relative h-[500px] select-none">
+        {/* 뒤 카드 peek - 다중 이미지일 때만 표시 */}
+        {images.length > 1 && (
+          <div className="absolute inset-0 pointer-events-none">
+            {peekItems.map((it, i) => (
+              <div
+                key={it.id}
+                className="absolute top-5 right-5 overflow-hidden rounded-2xl shadow"
+                style={{
+                  transform: `translateX(${i * 26}px) translateY(${i * 8}px) scale(${0.96 - i * 0.06})`,
+                  opacity: 0.35 - i * 0.07,
+                  width: '75%',
+                  height: '80%',
+                  background: '#f5f5f5',
+                }}
+              >
+                <img src={it.url} alt="" className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* 메인 카드 */}
         <AnimatePresence mode="popLayout">
           <motion.div
             key={current.id}
-            drag="x"
+            drag={images.length > 1 ? "x" : false} // 단일 이미지일 때는 드래그 비활성화
             dragConstraints={{ left: 0, right: 0 }}
             onDragEnd={(_, info) => {
-              if (info.offset.x < -80) goNext();
-              else if (info.offset.x > 80) goPrev();
+              if (images.length > 1) {
+                if (info.offset.x < -80) goNext();
+                else if (info.offset.x > 80) goPrev();
+              }
             }}
-            initial={{ x: 40, opacity: 0 }}
+            initial={{ x: images.length > 1 ? 40 : 0, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -40, opacity: 0 }}
+            exit={{ x: images.length > 1 ? -40 : 0, opacity: 0 }}
             transition={{ type: 'spring', bounce: 0.25, duration: 0.35 }}
             whileTap={{ scale: 0.98 }}
             className="relative z-10 bg-white border border-slate-200 rounded-2xl shadow-md h-full overflow-hidden flex flex-col"
@@ -162,14 +184,35 @@ export default function MealPeekSwiper({
           >
             <div className="h-56 relative flex-shrink-0">
               <img src={current.url} alt="meal" className="w-full h-full object-cover" />
-              <div className="absolute bottom-3 right-3 flex gap-2">
-                <button onClick={goPrev} className="px-3 py-1 rounded-lg bg-white/90 border text-sm">
-                  이전
+              
+              {/* 삭제 버튼 - 우측 상단 */}
+              {onDeleteImage && (
+                <button
+                  onClick={() => {
+                    onDeleteImage(current.id);
+                    // 삭제 후 이미지가 남아있으면 다음 이미지로 이동
+                    if (images.length > 1) {
+                      goNext();
+                    }
+                  }}
+                  className="absolute top-3 right-3 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg hover:bg-red-600 transition z-20"
+                  aria-label="이미지 삭제"
+                >
+                  <span className="text-lg font-bold">×</span>
                 </button>
-                <button onClick={goNext} className="px-3 py-1 rounded-lg bg-white/90 border text-sm">
-                  다음
-                </button>
-              </div>
+              )}
+              
+              {/* 이전/다음 버튼 - 다중 이미지일 때만 표시 */}
+              {images.length > 1 && (
+                <div className="absolute bottom-3 right-3 flex gap-2">
+                  <button onClick={goPrev} className="px-3 py-1 rounded-lg bg-white/90 border text-sm">
+                    이전
+                  </button>
+                  <button onClick={goNext} className="px-3 py-1 rounded-lg bg-white/90 border text-sm">
+                    다음
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 하단 컨트롤 */}
@@ -284,7 +327,9 @@ export default function MealPeekSwiper({
               )}
 
               {current.predictions && phase === 'done' && (
-                <div className="text-sm text-slate-500">확인 완료! 다음 사진으로 이동합니다…</div>
+                <div className="text-sm text-slate-500">
+                  {images.length > 1 ? '확인 완료! 다음 사진으로 이동합니다…' : '확인 완료! ✅'}
+                </div>
               )}
             </div>
           </motion.div>

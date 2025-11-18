@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import MealPeekSwiper from '@/components/MealPeekSwiper';
+import type { FoodAnalysisResult, FoodCandidate } from '@/types';
 
 type FoodPrediction = {
   name: string;
@@ -77,6 +78,8 @@ export default function MealDiaryPage() {
       return newSet;
     });
   };
+
+  const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -223,6 +226,23 @@ export default function MealDiaryPage() {
       setShowModal(true);
       return;
     }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50">
+      <div 
+        className={`max-w-2xl mx-auto p-4 pb-8 transition-all duration-300 ${
+          showError ? 'ring-8 ring-red-500/50 rounded-3xl' : ''
+        } ${isShaking ? 'animate-shake' : ''}`}
+      >
+        {/* 헤더 */}
+        <div className="mb-6 text-center">
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">
+            🍽️ 식단 분석
+          </h2>
+          <p className="text-sm text-slate-600">
+            음식 이미지를 업로드하면 AI가 자동으로 분석해드립니다
+          </p>
+        </div>
 
     setIsSaving(true);
     
