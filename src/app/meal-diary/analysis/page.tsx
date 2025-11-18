@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import MealPeekSwiper from '@/components/MealPeekSwiper';
+import type { FoodAnalysisResult, FoodCandidate } from '@/types';
 
 type FoodPrediction = {
   name: string;
@@ -39,6 +40,8 @@ export default function MealDiaryPage() {
   const [isShaking, setIsShaking] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
+
+  const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -178,6 +181,7 @@ export default function MealDiaryPage() {
       setIsAnalyzing(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50">
