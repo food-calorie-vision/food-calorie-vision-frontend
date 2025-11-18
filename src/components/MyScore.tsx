@@ -17,26 +17,44 @@ const MyScore = ({ userInfo }: MyScoreProps) => {
   useEffect(() => {
     const fetchScoreData = async () => {
       try {
-        // 백엔드에서 오늘의 점수 가져오기
-        const response = await fetch('http://localhost:8000/api/v1/scores/today', {
+        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        
+        // 대시보드 통계에서 평균 건강 점수 가져오기
+        const response = await fetch(`${apiEndpoint}/api/v1/meals/dashboard-stats`, {
           method: 'GET',
           credentials: 'include', // 세션 쿠키 포함
         });
         
         if (response.ok) {
-          const data = await response.json();
-          console.log('오늘의 점수:', data);
+          const result = await response.json();
+          console.log('대시보드 통계:', result);
           
-          setScoreData({
-            todayScore: data.todayScore,
-            previousScore: data.previousScore,
-            scoreChange: data.scoreChange,
-            feedback: data.feedback,
-            improvement: data.improvement,
-          });
+          if (result.success && result.data) {
+            const avgScore = Math.round(result.data.avg_health_score);
+            
+            setScoreData({
+              todayScore: avgScore,
+              previousScore: avgScore - 5, // TODO: 실제 전날 점수 계산
+              scoreChange: 5, // TODO: 실제 변화량 계산
+              feedback: avgScore >= 75 ? "훌륭한 식습관을 유지하고 있어요!" : 
+                       avgScore >= 50 ? "좋은 식습관이에요. 조금만 더 노력해봐요!" :
+                       "식습관 개선이 필요해요. 건강한 음식을 선택해보세요!",
+              improvement: avgScore >= 75 ? "현재 패턴을 유지하세요!" :
+                          avgScore >= 50 ? "채소와 단백질을 더 섭취해보세요." :
+                          "가공식품을 줄이고 신선한 재료를 사용해보세요.",
+            });
+          } else {
+            // 데이터 없음
+            setScoreData({
+              todayScore: 0,
+              previousScore: 0,
+              scoreChange: 0,
+              feedback: "아직 오늘 식사 기록이 없어요",
+              improvement: "식사를 기록해보세요!",
+            });
+          }
         } else {
           console.error('점수 조회 실패');
-          // 기본값
           setScoreData({
             todayScore: 0,
             previousScore: 0,

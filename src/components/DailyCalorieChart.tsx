@@ -13,6 +13,8 @@ const DailyCalorieChart = ({ userInfo }: DailyCalorieChartProps) => {
   const [data, setData] = useState<DailyCalorieData[]>([]);
   const [loading, setLoading] = useState(true);
   const [targetCalories, setTargetCalories] = useState(2000); // 목표 칼로리
+  const [yAxisTicks, setYAxisTicks] = useState<number[]>([]);
+  const [yAxisDomain, setYAxisDomain] = useState<[number, number]>([0, 2400]);
 
   // userInfo에서 권장 칼로리 설정
   useEffect(() => {
@@ -21,31 +23,69 @@ const DailyCalorieChart = ({ userInfo }: DailyCalorieChartProps) => {
     }
   }, [userInfo]);
 
+  // 데이터 변경 시 Y축 범위와 눈금 계산
+  useEffect(() => {
+    if (data.length === 0) return;
+
+    const maxCalories = Math.max(...data.map(d => d.calories), targetCalories);
+    const minCalories = Math.min(...data.map(d => d.calories));
+
+    // 100kcal 단위로 올림/내림
+    const yMax = Math.ceil(maxCalories / 100) * 100 + 200; // 여유 200kcal
+    const yMin = Math.floor(minCalories / 100) * 100 - 100; // 여유 100kcal
+    
+    // 100kcal 단위로 ticks 생성
+    const ticks = [];
+    for (let i = Math.max(0, yMin); i <= yMax; i += 100) {
+      ticks.push(i);
+    }
+
+    setYAxisDomain([Math.max(0, yMin), yMax]);
+    setYAxisTicks(ticks);
+  }, [data, targetCalories]);
+
   useEffect(() => {
     const fetchCalorieData = async () => {
       try {
-        // 백엔드에서 7일간의 칼로리 데이터 가져오기
-        const response = await fetch('http://localhost:8000/api/v1/meal-records/weekly-calories?days=7', {
+        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        
+        // 대시보드 통계에서 일일 칼로리 데이터 가져오기
+        const response = await fetch(`${apiEndpoint}/api/v1/meals/dashboard-stats`, {
           method: 'GET',
           credentials: 'include', // 세션 쿠키 포함
         });
         
         if (response.ok) {
-          const weeklyData = await response.json();
-          console.log('주간 칼로리 데이터:', weeklyData);
+          const result = await response.json();
+          console.log('칼로리 데이터:', result);
           
-          // 데이터가 있으면 설정, 없으면 빈 배열
-          setData(weeklyData.length > 0 ? weeklyData : [
-            { date: '데이터', calories: 0 }
-          ]);
+          if (result.success && result.data && result.data.daily_calories && result.data.daily_calories.length > 0) {
+            // 실제 최근 7일 칼로리 데이터 사용
+            setData(result.data.daily_calories);
+          } else {
+            // 데이터 없음 - 빈 차트 표시
+            const today = new Date();
+            const emptyData = [];
+            
+            for (let i = 6; i >= 0; i--) {
+              const date = new Date(today);
+              date.setDate(date.getDate() - i);
+              const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+              
+              emptyData.push({
+                date: dateStr,
+                calories: 0
+              });
+            }
+            
+            setData(emptyData);
+          }
         } else {
           console.error('칼로리 데이터 조회 실패');
-          // 기본 빈 데이터
           setData([{ date: '데이터 없음', calories: 0 }]);
         }
       } catch (error) {
         console.error('칼로리 데이터를 가져오는데 실패했습니다:', error);
-        // 에러 시 빈 데이터
         setData([{ date: '에러', calories: 0 }]);
       } finally {
         setLoading(false);
@@ -113,8 +153,8 @@ const DailyCalorieChart = ({ userInfo }: DailyCalorieChartProps) => {
               axisLine={false}
               tickLine={false}
               tick={{ fontSize: 12, fill: '#6b7280' }}
-              domain={[1600, 2300]}
-              ticks={[1700, 1800, 1900, 2000, 2100, 2200]}
+              domain={yAxisDomain}
+              ticks={yAxisTicks}
             />
             <Tooltip content={<CustomTooltip />} />
             
