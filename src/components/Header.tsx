@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Settings } from 'lucide-react';
 
 interface HeaderProps {
   isLoggedIn: boolean;
@@ -57,6 +58,16 @@ const Header = ({ isLoggedIn, userName, handleLogout }: HeaderProps) => {
                 <span className="text-sm font-medium text-gray-700">
                   {userName}님 어서오세요
                 </span>
+
+                <Link 
+                href="/settings" 
+                aria-label="설정" 
+                className="p-2 rounded-full hover:bg-gray-100"
+                >
+                  <Settings className="w-5 h-5 text-gray-600" />
+                
+                </Link>
+
                 <button
                   onClick={handleLogout}
                   className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors"

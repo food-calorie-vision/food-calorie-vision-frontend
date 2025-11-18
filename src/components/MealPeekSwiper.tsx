@@ -7,7 +7,7 @@ type FoodPrediction = {
   name: string;
   confidence: number;
   selected: boolean;
-  ingredients?: string[]; // GPT Vision이 추출한 실제 재료
+  ingredients?: string[];
 };
 
 type UploadedImage = {
@@ -52,6 +52,7 @@ export default function MealPeekSwiper({
   const hasItems = images.length > 0;
   const current = hasItems ? images[wrap(index, images.length)] : undefined;
 
+  // 모든 React Hooks를 조건문/early return 전에 호출
   const peekItems = useMemo(() => {
     if (!hasItems) return [];
     const n = Math.min(3, Math.max(0, images.length - 1));
@@ -123,10 +124,29 @@ export default function MealPeekSwiper({
 
   return (
     <div className="w-full max-w-3xl mx-auto mb-8">
-      {/* 진행 표시 - 다중 이미지일 때만 표시 */}
-      {images.length > 1 && (
-        <div className="flex items-center justify-between mb-2 text-sm text-slate-500">
-          <div>오늘의 식사일기 · {wrap(index, images.length) + 1} / {images.length}</div>
+      {/* 진행 표시 */}
+      <div className="flex items-center justify-between mb-2 text-sm text-slate-500">
+        <div>오늘의 식사일기 · {wrap(index, images.length) + 1} / {images.length}</div>
+      </div>
+
+      <div className="relative h-[500px] select-none">
+        {/* 뒤 카드 peek */}
+        <div className="absolute inset-0 pointer-events-none">
+          {peekItems.map((it, i) => (
+            <div
+              key={it.id}
+              className="absolute top-5 right-5 overflow-hidden rounded-2xl shadow"
+              style={{
+                transform: `translateX(${i * 26}px) translateY(${i * 8}px) scale(${0.96 - i * 0.06})`,
+                opacity: 0.35 - i * 0.07,
+                width: '75%',
+                height: '80%',
+                background: '#f5f5f5',
+              }}
+            >
+              <img src={it.url} alt="" className="w-full h-full object-cover" />
+            </div>
+          ))}
         </div>
       )}
 
@@ -218,7 +238,7 @@ export default function MealPeekSwiper({
                   <div className="flex-shrink-0 mb-3">
                     <p className="text-sm text-slate-600 mb-2">업로드한 음식은</p>
                     <p className="text-lg font-bold text-slate-900">
-                      <span className="text-green-600">{nameCandidates[0]}</span> 인 것으로 보입니다.
+                      <span className="text-green-600">{nameCandidates[0]}</span> 로 보입니다.
                     </p>
                     {nameCandidates.length > 1 && (
                       <p className="text-xs text-slate-500 mt-1">다른 후보를 선택하려면 아래에서 골라주세요</p>
@@ -283,23 +303,8 @@ export default function MealPeekSwiper({
               {current.predictions && phase === 'ingredients' && (
                 <div className="flex flex-col h-full">
                   <div className="flex-shrink-0 mb-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="text-sm text-slate-600 mb-1">주재료는 아래와 같이 보입니다.</p>
-                        <p className="text-sm font-semibold text-slate-900">맞나요?</p>
-                      </div>
-                      <button
-                        onClick={goBackToNameSelection}
-                        className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200 transition flex items-center gap-1"
-                      >
-                        <span>←</span> 음식 다시 선택
-                      </button>
-                    </div>
-                    {ingredientsCandidates.length === 0 && (
-                      <p className="text-xs text-orange-600 bg-orange-50 px-3 py-2 rounded-lg border border-orange-200 mt-2">
-                        ⚠️ 재료 정보가 없습니다. 음식을 다시 선택하거나 분석을 다시 시도해주세요.
-                      </p>
-                    )}
+                    <p className="text-sm text-slate-600 mb-1">주재료는 아래와 같이 보입니다.</p>
+                    <p className="text-sm font-semibold text-slate-900">맞나요?</p>
                   </div>
                   <div className="flex flex-wrap gap-2 overflow-y-auto flex-1 pr-1 content-start">
                     {ingredientsCandidates.map((ing) => {
@@ -320,13 +325,12 @@ export default function MealPeekSwiper({
                       );
                     })}
                   </div>
-                  <div className="mt-4 flex-shrink-0 space-y-2">
+                  <div className="mt-4 flex-shrink-0">
                     <button
                       onClick={confirmIngredients}
-                      disabled={ingredientsCandidates.length === 0}
-                      className="w-full px-4 py-3 rounded-xl bg-green-500 text-white font-semibold hover:bg-green-600 transition shadow-sm disabled:bg-slate-300 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-3 rounded-xl bg-green-500 text-white font-semibold hover:bg-green-600 transition shadow-sm"
                     >
-                      {images.length > 1 ? '완료 → 다음 사진' : '완료'}
+                      완료 → 다음 사진
                     </button>
                   </div>
                 </div>

@@ -11,16 +11,35 @@ const FrequentFoodsList = () => {
   useEffect(() => {
     const fetchFrequentFoods = async () => {
       try {
-        // 백엔드에서 자주 먹는 음식 데이터 가져오기
-        const response = await fetch('http://localhost:8000/api/v1/meal-records/frequent-foods?limit=4', {
+        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        
+        // 대시보드 통계에서 자주 먹는 음식 가져오기
+        const response = await fetch(`${apiEndpoint}/api/v1/meals/dashboard-stats`, {
           method: 'GET',
           credentials: 'include', // 세션 쿠키 포함
         });
         
         if (response.ok) {
-          const foods = await response.json();
-          console.log('자주 먹는 음식:', foods);
-          setFrequentFoods(foods);
+          const result = await response.json();
+          console.log('자주 먹는 음식:', result);
+          
+          if (result.success && result.data && result.data.frequent_foods) {
+            // frequent_foods 형식: [{food_name: "밥", count: 5}, ...]
+            // FrequentFood 형식으로 변환 (임시 데이터)
+            const foods = result.data.frequent_foods.map((item: any, index: number) => ({
+              id: index + 1,
+              name: item.food_name,
+              calories: 300, // TODO: 실제 칼로리 데이터 조회
+              nutrients: {
+                carbs: 50, // TODO: 실제 영양소 데이터
+                protein: 15,
+                fat: 10,
+              }
+            }));
+            setFrequentFoods(foods.slice(0, 4)); // 최대 4개만 표시
+          } else {
+            setFrequentFoods([]);
+          }
         } else {
           console.error('자주 먹는 음식 조회 실패');
           setFrequentFoods([]);
