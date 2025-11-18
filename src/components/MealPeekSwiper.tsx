@@ -130,27 +130,6 @@ export default function MealPeekSwiper({
       </div>
 
       <div className="relative h-[500px] select-none">
-        {/* 뒤 카드 peek */}
-        <div className="absolute inset-0 pointer-events-none">
-          {peekItems.map((it, i) => (
-            <div
-              key={it.id}
-              className="absolute top-5 right-5 overflow-hidden rounded-2xl shadow"
-              style={{
-                transform: `translateX(${i * 26}px) translateY(${i * 8}px) scale(${0.96 - i * 0.06})`,
-                opacity: 0.35 - i * 0.07,
-                width: '75%',
-                height: '80%',
-                background: '#f5f5f5',
-              }}
-            >
-              <img src={it.url} alt="" className="w-full h-full object-cover" />
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="relative h-[500px] select-none">
         {/* 뒤 카드 peek - 다중 이미지일 때만 표시 */}
         {images.length > 1 && (
           <div className="absolute inset-0 pointer-events-none">

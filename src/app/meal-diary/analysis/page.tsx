@@ -79,8 +79,6 @@ export default function MealDiaryPage() {
     });
   };
 
-  const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -123,7 +121,6 @@ export default function MealDiaryPage() {
           formData.append('file', img.file);
 
           // 백엔드 API 호출
-          const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
           const response = await fetch(`${apiEndpoint}/api/v1/food/analysis-upload`, {
             method: 'POST',
             body: formData,
@@ -226,23 +223,6 @@ export default function MealDiaryPage() {
       setShowModal(true);
       return;
     }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50">
-      <div 
-        className={`max-w-2xl mx-auto p-4 pb-8 transition-all duration-300 ${
-          showError ? 'ring-8 ring-red-500/50 rounded-3xl' : ''
-        } ${isShaking ? 'animate-shake' : ''}`}
-      >
-        {/* 헤더 */}
-        <div className="mb-6 text-center">
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">
-            🍽️ 식단 분석
-          </h2>
-          <p className="text-sm text-slate-600">
-            음식 이미지를 업로드하면 AI가 자동으로 분석해드립니다
-          </p>
-        </div>
 
     setIsSaving(true);
     
@@ -508,10 +488,8 @@ export default function MealDiaryPage() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* 애니메이션 CSS */}
-      <style jsx>{`
+        {/* 애니메이션 CSS */}
+        <style jsx>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0) rotate(0deg); }
           10%, 30%, 50%, 70%, 90% { transform: translateX(-10px) rotate(-1deg); }
@@ -540,7 +518,7 @@ export default function MealDiaryPage() {
         .animate-modalSlideUp {
           animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-      `}</style>
-    </div>
-  );
-}
+        `}</style>
+      </div>
+    );
+  }
