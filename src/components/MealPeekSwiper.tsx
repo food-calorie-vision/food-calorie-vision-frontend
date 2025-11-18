@@ -52,32 +52,40 @@ export default function MealPeekSwiper({
   const hasItems = images.length > 0;
   const current = hasItems ? images[wrap(index, images.length)] : undefined;
 
-  // ✅ 안전 가드: current가 없으면 아무것도 렌더하지 않음
-  if (!hasItems || !current) return null;
-
   const peekItems = useMemo(() => {
+    if (!hasItems) return [];
     const n = Math.min(3, Math.max(0, images.length - 1));
     return Array.from({ length: n }, (_, k) => images[wrap(index + 1 + k, images.length)]);
-  }, [images, index]);
-
-  const goNext = () => setIndex((i) => wrap(i + 1, images.length));
-  const goPrev = () => setIndex((i) => wrap(i - 1, images.length));
-
-  const phase: Phase = phaseById[current.id] ?? 'name';
+  }, [images, index, hasItems]);
 
   const nameCandidates = useMemo<string[]>(
-    () => (current.predictions ? current.predictions.map((p) => p.name) : []),
+    () => (current?.predictions ? current.predictions.map((p) => p.name) : []),
     [current]
   );
 
   const ingredientsCandidates = useMemo<string[]>(() => {
+    if (!current) return [];
+    
     // 선택된 음식의 실제 재료 가져오기 (GPT Vision 추출)
     const chosenName = pickedNameById[current.id] ?? nameCandidates[0];
     if (!chosenName) return [];
     
     const selectedPrediction = current.predictions?.find((p) => p.name === chosenName);
-    return selectedPrediction?.ingredients ?? [];
-  }, [current.id, current.predictions, nameCandidates, pickedNameById]);
+    const ingredients = selectedPrediction?.ingredients ?? [];
+    
+    // 빈 값, "-", 공백 제거 및 중복 제거
+    return ingredients
+      .filter((ing) => ing && ing.trim() !== '' && ing.trim() !== '-')
+      .filter((ing, index, self) => self.indexOf(ing) === index);
+  }, [current, nameCandidates, pickedNameById]);
+
+  // ✅ 안전 가드: current가 없으면 아무것도 렌더하지 않음 (모든 Hooks 호출 후)
+  if (!hasItems || !current) return null;
+
+  const goNext = () => setIndex((i) => wrap(i + 1, images.length));
+  const goPrev = () => setIndex((i) => wrap(i - 1, images.length));
+
+  const phase: Phase = phaseById[current.id] ?? 'name';
 
   const chooseName = (n: string) =>
     setPickedNameById((prev) => ({ ...prev, [current.id]: n }));
