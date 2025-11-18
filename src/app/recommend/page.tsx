@@ -43,7 +43,8 @@ const INITIAL_BOT_MESSAGE: ChatMessage = {
   text:
     "안녕하세요! KCalculator 레시피 도우미입니다.\n" +
     "먹고 싶은 음식을 말씀해주시면 건강 상태를 고려한 레시피를 추천해드릴게요 🍳\n" +
-    "예) '나 오늘 대창 먹을건데 레시피 추천해줘', '삼겹살 요리하고 싶어'",
+    "예) '나 오늘 대창 먹을건데 레시피 추천해줘', '삼겹살 요리하고 싶어'\n\n" +
+    "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다.",
 };
 
 // 더미 식단 카드 데이터
@@ -100,28 +101,46 @@ export default function RecommendPage() {
   // 식단 추천 상태 (diet 탭용)
   const [dietFlowStep, setDietFlowStep] = useState<"chat" | "select" | "cooking" | "complete">("chat");
   const [dietMessages, setDietMessages] = useState<ChatMessage[]>([
-    { role: "bot", text: "안녕하세요! 식단 추천 도우미입니다.\n식단 추천을 원하시면 말씀해주세요 🥗\n예) '요즘 고기류를 먹고 싶은데 식단 추천해줘', '내가 가진 식재료 기반으로 식단 짜줘'" }
+    { role: "bot", text: "안녕하세요! 식단 추천 도우미입니다.\n식단 추천을 원하시면 말씀해주세요 🥗\n예) '요즘 고기류를 먹고 싶은데 식단 추천해줘', '내가 가진 식재료 기반으로 식단 짜줘'\n\n⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다." }
   ]);
   const [dietChatInput, setDietChatInput] = useState("");
   const [dietLoading, setDietLoading] = useState(false);
   const [recommendedDietPlans, setRecommendedDietPlans] = useState<DietPlan[]>([]);
   const [selectedDietPlan, setSelectedDietPlan] = useState<DietPlan | null>(null);
 
-  // 로그인 상태 확인
+  // 로그인 상태 확인 (페이지 로드 시 한 번만)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const expire = sessionStorage.getItem("login_expire");
-      const user = sessionStorage.getItem("user_name");
+    const checkAuth = async () => {
+      try {
+        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+          credentials: 'include',
+        });
 
-      if (expire && Date.now() < Number(expire)) {
-        setIsLoggedIn(true);
-        setUserName(user || "");
-      } else {
-        alert("로그인이 필요합니다.");
-        router.push("/");
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user_id) {
+            setIsLoggedIn(true);
+            setUserName(data.nickname || data.username);
+            setIsCheckingAuth(false);
+          } else {
+            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+            router.push('/login');
+          }
+        } else if (response.status === 401 || response.status === 403) {
+          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+          router.push('/login');
+        } else {
+          setIsCheckingAuth(false);
+        }
+      } catch (error) {
+        console.error('인증 확인 실패:', error);
+        // 네트워크 에러는 무시
+        setIsCheckingAuth(false);
       }
-      setIsCheckingAuth(false);
-    }
+    };
+
+    checkAuth();
   }, [router]);
 
   // 탭 변경
@@ -135,7 +154,7 @@ export default function RecommendPage() {
     if (dietFlowStep !== "chat") {
       setDietFlowStep("chat");
       setDietMessages([
-        { role: "bot", text: "안녕하세요! 식단 추천 도우미입니다.\n식단 추천을 원하시면 말씀해주세요 🥗\n예) '요즘 고기류를 먹고 싶은데 식단 추천해줘', '내가 가진 식재료 기반으로 식단 짜줘'" }
+        { role: "bot", text: "안녕하세요! 식단 추천 도우미입니다.\n식단 추천을 원하시면 말씀해주세요 🥗\n예) '요즘 고기류를 먹고 싶은데 식단 추천해줘', '내가 가진 식재료 기반으로 식단 짜줘'\n\n⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다." }
       ]);
     }
   };
@@ -236,9 +255,42 @@ export default function RecommendPage() {
   };
 
   // 음식 기록하기
-  const recordFood = () => {
-    alert(`"${selectedRecipe?.name}"을(를) 식단에 기록했습니다!`);
-    resetFlow();
+  const recordFood = async () => {
+    if (!selectedRecipe) return;
+
+    try {
+      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      
+      // 추천 음식 저장 API 호출
+      const response = await fetch(`${apiEndpoint}/api/v1/meals/save-recommended`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          food_name: selectedRecipe.name,
+          ingredients_used: [], // TODO: 실제 사용된 식재료 목록
+          meal_type: '점심', // TODO: 실제 식사 유형
+          portion_size_g: 300.0,
+          memo: `${selectedRecipe.name} 조리 완료`
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`✅ "${selectedRecipe.name}" 기록 완료!\n\n건강 점수: ${result.data.health_score}점\n등급: ${result.data.food_grade}`);
+        router.push('/dashboard');
+      } else {
+        alert(`기록 저장 실패: ${result.message}`);
+        resetFlow();
+      }
+    } catch (error) {
+      console.error('❌ 음식 기록 오류:', error);
+      alert('음식 기록 중 오류가 발생했습니다.');
+      resetFlow();
+    }
   };
 
   // 처음으로 돌아가기
@@ -352,7 +404,7 @@ export default function RecommendPage() {
   const resetDietFlow = () => {
     setDietFlowStep("chat");
     setDietMessages([
-      { role: "bot", text: "안녕하세요! 식단 추천 도우미입니다.\n식단 추천을 원하시면 말씀해주세요 🥗\n예) '요즘 고기류를 먹고 싶은데 식단 추천해줘', '내가 가진 식재료 기반으로 식단 짜줘'" }
+      { role: "bot", text: "안녕하세요! 식단 추천 도우미입니다.\n식단 추천을 원하시면 말씀해주세요 🥗\n예) '요즘 고기류를 먹고 싶은데 식단 추천해줘', '내가 가진 식재료 기반으로 식단 짜줘'\n\n⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다." }
     ]);
     setRecommendedDietPlans([]);
     setSelectedDietPlan(null);
@@ -364,7 +416,7 @@ export default function RecommendPage() {
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">로딩 중...</p>
+          <p className="text-gray-600">로그인 확인 중...</p>
         </div>
       </div>
     );

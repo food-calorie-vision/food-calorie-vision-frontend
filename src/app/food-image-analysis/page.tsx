@@ -20,18 +20,54 @@ export default function FoodImageAnalysisPage() {
   
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState('');
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
+  // 인증 체크 (페이지 로드 시 한 번만)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const expire = sessionStorage.getItem('login_expire');
-      const user = sessionStorage.getItem('user_name');
-      
-      if (expire && Date.now() < Number(expire)) {
-        setIsLoggedIn(true);
-        setUserName(user || '');
+    const checkAuth = async () => {
+      try {
+        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user_id) {
+            setIsLoggedIn(true);
+            setUserName(data.nickname || data.username);
+            setIsCheckingAuth(false);
+          } else {
+            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+            router.push('/login');
+          }
+        } else if (response.status === 401 || response.status === 403) {
+          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+          router.push('/login');
+        } else {
+          setIsCheckingAuth(false);
+        }
+      } catch (error) {
+        console.error('인증 확인 실패:', error);
+        // 네트워크 에러는 무시
+        setIsCheckingAuth(false);
       }
-    }
-  }, []);
+    };
+
+    checkAuth();
+  }, [router]);
+
+  // 인증 체크 중이면 로딩 표시
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent mb-4"></div>
+          <p className="text-slate-600 font-medium">로그인 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -188,8 +224,10 @@ export default function FoodImageAnalysisPage() {
     setIsSaving(true);
 
     try {
+      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      
       // 백엔드 API로 식사 기록 저장
-      const response = await fetch('http://localhost:8000/api/v1/meal-records', {
+      const response = await fetch(`${apiEndpoint}/api/v1/meals/save`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -200,13 +238,15 @@ export default function FoodImageAnalysisPage() {
           image_url: imagePreview, // 실제로는 S3 등에 업로드한 URL 사용
           foods: [
             {
-              food_id: 1, // 임시 ID (실제로는 food_nutrients 테이블의 ID)
+              food_id: analysisResult.foodId || `food_${Date.now()}`, // GPT Vision에서 반환한 food_id 사용
               food_name: analysisResult.foodName,
-              quantity: 1.0,
+              portion_size_g: analysisResult.portionSize ? parseFloat(analysisResult.portionSize) : 100.0,
               calories: analysisResult.calories,
               protein: analysisResult.nutrients.protein,
               carbs: analysisResult.nutrients.carbs,
               fat: analysisResult.nutrients.fat,
+              sodium: analysisResult.nutrients.sodium,
+              fiber: analysisResult.nutrients.fiber || 0,
             },
           ],
           memo: memo || null,
@@ -215,12 +255,12 @@ export default function FoodImageAnalysisPage() {
 
       const data = await response.json();
 
-      if (response.ok) {
-        alert('식사 기록이 저장되었습니다!');
+      if (data.success) {
+        alert(`✅ 식사 기록이 저장되었습니다!\n건강 점수: ${data.data[0].health_score || '계산중'}점`);
         router.push('/dashboard');
       } else {
         console.error('저장 실패:', data);
-        alert(data.detail || '식사 기록 저장에 실패했습니다.');
+        alert(data.message || data.detail || '식사 기록 저장에 실패했습니다.');
       }
     } catch (error) {
       console.error('저장 에러:', error);

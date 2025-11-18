@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 type IngredientPrediction = {
   name: string;
@@ -20,6 +21,18 @@ type IngredientImage = {
   showSuggestions?: boolean;
 };
 
+type RecommendedFood = {
+  name: string;
+  description: string;
+  ingredients: string[];
+  steps: string[];
+};
+
+type CookingStep = {
+  stepNumber: number;
+  instruction: string;
+};
+
 // 한국 식재료 목록 (자동완성용)
 const KOREAN_INGREDIENTS = [
   '감자', '고구마', '당근', '양파', '대파', '마늘', '생강', '무', '배추', '상추',
@@ -33,8 +46,74 @@ const KOREAN_INGREDIENTS = [
 ];
 
 export default function IngredientPage() {
+  const router = useRouter();
   const [images, setImages] = useState<IngredientImage[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzingProgress, setAnalyzingProgress] = useState({ current: 0, total: 0 });
+  
+  // 추천 관련 상태
+  const [flowStep, setFlowStep] = useState<'input' | 'recommend' | 'cooking' | 'complete'>('input');
+  const [recommendedFoods, setRecommendedFoods] = useState<RecommendedFood[]>([]);
+  const [selectedFood, setSelectedFood] = useState<RecommendedFood | null>(null);
+  const [cookingSteps, setCookingSteps] = useState<CookingStep[]>([]);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+  
+  // 재료 확인 모달 상태
+  const [showIngredientModal, setShowIngredientModal] = useState(false);
+  const [ingredientsWithQuantity, setIngredientsWithQuantity] = useState<Array<{name: string, quantity: number, available: number}>>([]);
+  
+  // 인증 로딩 상태
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // 인증 체크 함수
+  const checkAuthAndRedirect = (response: Response) => {
+    if (response.status === 401 || response.status === 403) {
+      alert('⚠️ 로그인이 만료되었습니다. 다시 로그인해주세요.');
+      router.push('/login');
+      return true;
+    }
+    return false;
+  };
+
+  // 페이지 로드 시 인증 확인 (한 번만)
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+          credentials: 'include',
+        });
+        
+        if (response.status === 401 || response.status === 403) {
+          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+          router.push('/login');
+          return;
+        }
+        
+        // 인증 성공
+        setIsCheckingAuth(false);
+      } catch (error) {
+        console.error('인증 확인 실패:', error);
+        // 네트워크 에러는 무시 (백엔드 재시작 등)
+        setIsCheckingAuth(false);
+      }
+    };
+    
+    checkAuth();
+  }, [router]);
+
+  // 인증 체크 중이면 로딩 표시
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-green-500 border-t-transparent mb-4"></div>
+          <p className="text-slate-600 font-medium">로그인 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -60,15 +139,27 @@ export default function IngredientPage() {
     try {
       const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       
-      for (const img of images) {
-        if (img.predictions || !img.file) continue; // 이미 분석되었거나 파일이 없으면 스킵
+      // 분석할 이미지 필터링
+      const imagesToAnalyze = images.filter(img => !img.predictions && img.file);
+      
+      if (imagesToAnalyze.length === 0) {
+        alert('분석할 이미지가 없습니다.');
+        setIsAnalyzing(false);
+        return;
+      }
 
+      // 진행률 초기화
+      setAnalyzingProgress({ current: 0, total: imagesToAnalyze.length });
+      console.log(`🚀 총 ${imagesToAnalyze.length}개 이미지 분석 시작`);
+
+      // 모든 이미지를 병렬로 분석 (Promise.all)
+      const analysisPromises = imagesToAnalyze.map(async (img, index) => {
         try {
-          console.log(`🔍 백엔드로 이미지 분석 중: ${img.id}`);
+          console.log(`🔍 [${index + 1}/${imagesToAnalyze.length}] 이미지 분석 중: ${img.id}`);
           
           // FormData로 이미지 전송
           const formData = new FormData();
-          formData.append('file', img.file);
+          formData.append('file', img.file!);
           
           // 백엔드 API 호출 (Roboflow + GPT Vision)
           const response = await fetch(`${apiEndpoint}/api/v1/ingredients/analyze-with-roboflow-gpt`, {
@@ -77,12 +168,20 @@ export default function IngredientPage() {
             credentials: 'include',
           });
 
+          // 인증 체크
+          if (checkAuthAndRedirect(response)) {
+            return null;
+          }
+
           if (!response.ok) {
             throw new Error('식재료 분석에 실패했습니다.');
           }
 
           const result = await response.json();
-          console.log('📦 백엔드 분석 결과:', result);
+          console.log(`📦 [${index + 1}/${imagesToAnalyze.length}] 분석 결과:`, result);
+
+          // 진행률 업데이트
+          setAnalyzingProgress(prev => ({ ...prev, current: prev.current + 1 }));
 
           // 결과를 우리 형식으로 변환
           const ingredientMap = new Map<string, { count: number; confidence: number }>();
@@ -114,30 +213,38 @@ export default function IngredientPage() {
             }))
             .sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
-          // 이미지 상태 업데이트 (빈 결과는 빈 배열로)
-          setImages((prev) =>
-            prev.map((i) =>
-              i.id === img.id
-                ? { ...i, predictions: ingredientPredictions }
-                : i
-            )
-          );
+          return { id: img.id, predictions: ingredientPredictions };
         } catch (error) {
           console.error(`❌ 이미지 분석 실패 (${img.id}):`, error);
-          setImages((prev) =>
-            prev.map((i) =>
-              i.id === img.id
-                ? { ...i, predictions: [] }
-                : i
-            )
-          );
+          // 진행률 업데이트 (실패해도 카운트)
+          setAnalyzingProgress(prev => ({ ...prev, current: prev.current + 1 }));
+          return { id: img.id, predictions: [] };
         }
-      }
+      });
+
+      // 모든 분석 완료 대기
+      const results = await Promise.all(analysisPromises);
+      console.log(`✅ 모든 분석 완료! 총 ${results.length}개 결과`);
+
+      // 한 번에 모든 결과 업데이트
+      setImages((prev) =>
+        prev.map((img) => {
+          const result = results.find(r => r.id === img.id);
+          if (result) {
+            return { ...img, predictions: result.predictions };
+          }
+          return img;
+        })
+      );
+
+      alert(`✅ ${results.length}개 이미지 분석 완료!`);
+      
     } catch (error) {
       console.error('❌ 전체 분석 프로세스 실패:', error);
       alert('식재료 분석 중 오류가 발생했습니다.');
     } finally {
       setIsAnalyzing(false);
+      setAnalyzingProgress({ current: 0, total: 0 });
     }
   };
 
@@ -207,6 +314,11 @@ export default function IngredientPage() {
         body: JSON.stringify({ ingredients: selectedIngredients }),
       });
 
+      // 인증 체크
+      if (checkAuthAndRedirect(response)) {
+        return;
+      }
+
       if (!response.ok) {
         throw new Error('식재료 저장에 실패했습니다.');
       }
@@ -223,6 +335,8 @@ export default function IngredientPage() {
   };
 
   const handleGetRecommendations = async () => {
+    setIsLoadingRecommendations(true);
+    
     try {
       const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const response = await fetch(`${apiEndpoint}/api/v1/ingredients/recommendations`, {
@@ -230,19 +344,64 @@ export default function IngredientPage() {
         credentials: 'include',
       });
 
+      // 인증 체크
+      if (checkAuthAndRedirect(response)) {
+        setIsLoadingRecommendations(false);
+        return;
+      }
+
       if (!response.ok) {
         throw new Error('음식 추천을 가져오는데 실패했습니다.');
       }
 
       const result = await response.json();
       
-      // 추천 결과를 alert로 표시 (나중에 UI 개선 가능)
       if (result.success && result.data) {
-        alert(`🍽️ 추천 음식:\n\n${result.data.recommendations}`);
+        // 추천 결과 표시 (모달이나 새 섹션으로)
+        setRecommendedFoods(parseRecommendations(result.data.recommendations));
+        setFlowStep('recommend');
+      } else {
+        alert('추천을 가져올 수 없습니다.');
       }
     } catch (error) {
       console.error('❌ 음식 추천 오류:', error);
-      alert('음식 추천을 가져오는 중 오류가 발생했습니다.');
+      alert('음식 추천을 가져오는 중 오류가 발생했습니다. 환경 변수(OPENAI_API_KEY)가 설정되었는지 확인해주세요.');
+    } finally {
+      setIsLoadingRecommendations(false);
+    }
+  };
+  
+  // GPT 추천 텍스트를 파싱해서 음식 목록으로 변환
+  const parseRecommendations = (text: string): RecommendedFood[] => {
+    try {
+      // JSON 형식으로 파싱
+      const parsed = JSON.parse(text);
+      
+      if (parsed.foods && Array.isArray(parsed.foods)) {
+        return parsed.foods.map((food: any) => ({
+          name: food.name || "이름 없음",
+          description: food.description || "",
+          ingredients: food.ingredients || [],
+          steps: food.steps || []
+        }));
+      }
+      
+      // JSON 형식이 아니면 빈 배열 반환
+      console.warn('⚠️ JSON 형식이 아닌 응답:', text);
+      return [];
+    } catch (error) {
+      console.error('❌ 추천 파싱 오류:', error);
+      console.log('원본 텍스트:', text);
+      
+      // 파싱 실패 시 더미 데이터 반환 (개발 중에만)
+      return [
+        {
+          name: "추천 불러오기 실패",
+          description: "응답 형식을 파싱할 수 없습니다. 백엔드 로그를 확인해주세요.",
+          ingredients: [],
+          steps: ["백엔드 서버를 확인하세요"]
+        }
+      ];
     }
   };
 
@@ -511,40 +670,357 @@ export default function IngredientPage() {
 
         {/* 분석 버튼 */}
         {images.length > 0 && !images[0].predictions && (
-          <button
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-green-600 hover:to-green-700 active:scale-[0.98] transition-all duration-200 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed shadow-lg hover:shadow-xl disabled:shadow-none"
-          >
-            {isAnalyzing ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                분석 중...
-              </span>
-            ) : (
-              '🔍 식재료 분석 시작'
+          <div className="space-y-3">
+            <button
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
+              className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-green-600 hover:to-green-700 active:scale-[0.98] transition-all duration-200 disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed shadow-lg hover:shadow-xl disabled:shadow-none"
+            >
+              {isAnalyzing ? (
+                <span className="flex flex-col items-center justify-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    분석 중...
+                  </div>
+                  {analyzingProgress.total > 0 && (
+                    <div className="text-sm font-normal">
+                      {analyzingProgress.current} / {analyzingProgress.total} 완료
+                    </div>
+                  )}
+                </span>
+              ) : (
+                '🔍 식재료 분석 시작'
+              )}
+            </button>
+            
+            {/* 진행률 바 */}
+            {isAnalyzing && analyzingProgress.total > 0 && (
+              <div className="bg-white rounded-xl p-4 border-2 border-green-200">
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="font-semibold text-slate-700">분석 진행률</span>
+                  <span className="text-green-600 font-bold">
+                    {Math.round((analyzingProgress.current / analyzingProgress.total) * 100)}%
+                  </span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-green-500 to-green-600 h-full rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${(analyzingProgress.current / analyzingProgress.total) * 100}%` }}
+                  />
+                </div>
+                <div className="mt-2 text-xs text-slate-600 text-center">
+                  💡 모든 이미지를 병렬로 분석하는 중입니다. 잠시만 기다려주세요!
+                </div>
+              </div>
             )}
-          </button>
+          </div>
         )}
 
-        {/* 저장 버튼 */}
-        {images.length > 0 && images[0].predictions && (
-          <div className="space-y-4">
-            <button 
-              onClick={handleSaveIngredients}
-              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-blue-600 hover:to-blue-700 active:scale-[0.98] transition-all duration-200 shadow-lg hover:shadow-xl"
-            >
-              💾 선택한 식재료 저장하기
-            </button>
+        {/* 저장 및 추천 버튼 */}
+        {flowStep === 'input' && (
+          <div className="space-y-4 mt-6">
+            {/* 식재료 저장 버튼 - 분석 완료 시에만 표시 */}
+            {images.length > 0 && images[0].predictions && (
+              <button 
+                onClick={handleSaveIngredients}
+                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-blue-600 hover:to-blue-700 active:scale-[0.98] transition-all duration-200 shadow-lg hover:shadow-xl"
+              >
+                💾 선택한 식재료 저장하기
+              </button>
+            )}
+            
+            {/* 음식 추천 버튼 - 항상 표시 (재료 없어도 추천 가능) */}
             <button 
               onClick={handleGetRecommendations}
-              className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-purple-600 hover:to-purple-700 active:scale-[0.98] transition-all duration-200 shadow-lg hover:shadow-xl"
+              disabled={isLoadingRecommendations}
+              className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-5 rounded-2xl font-bold text-lg hover:from-purple-600 hover:to-purple-700 active:scale-[0.98] transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-slate-300 disabled:to-slate-400 disabled:cursor-not-allowed"
             >
-              🍽️ 저장된 식재료로 음식 추천받기
+              {isLoadingRecommendations ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  추천 불러오는 중...
+                </span>
+              ) : (
+                '🍽️ 보유 식재료로 음식 추천받기'
+              )}
             </button>
+            
+            {images.length === 0 && (
+              <div className="text-center text-sm text-slate-600 bg-purple-50 p-3 rounded-xl">
+                💡 식재료가 없어도 추천받을 수 있어요! 
+                <br />보유 식재료를 기반으로 맞춤 음식을 추천해드립니다.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 추천 결과 표시 */}
+        {flowStep === 'recommend' && recommendedFoods.length > 0 && (
+          <div className="mt-6 space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-2xl font-bold text-slate-800">🍽️ 추천 음식</h3>
+              <button
+                onClick={() => {
+                  setFlowStep('input');
+                  setRecommendedFoods([]);
+                  setSelectedFood(null);
+                }}
+                className="text-sm text-slate-600 hover:text-slate-800 px-4 py-2 rounded-lg hover:bg-slate-100"
+              >
+                ← 돌아가기
+              </button>
+            </div>
+
+            <div className="text-sm bg-amber-50 border-2 border-amber-200 p-4 rounded-xl mb-4">
+              ⚠️ <strong>면책 조항:</strong> 본 추천은 AI 기반 일반적인 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다. 
+              건강 상태나 질병이 있는 경우 반드시 전문의와 상담하시기 바랍니다.
+            </div>
+
+            {recommendedFoods.map((food, index) => (
+              <div 
+                key={index}
+                className="bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-purple-300 transition-all shadow-sm hover:shadow-md"
+              >
+                <h4 className="text-xl font-bold text-slate-800 mb-2">{food.name}</h4>
+                <p className="text-slate-600 mb-4">{food.description}</p>
+                
+                <div className="mb-4">
+                  <div className="text-sm font-semibold text-slate-700 mb-2">필요한 재료:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {food.ingredients.map((ing, i) => (
+                      <span 
+                        key={i}
+                        className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm"
+                      >
+                        {ing}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setSelectedFood(food);
+                    setCookingSteps(food.steps.map((step, i) => ({
+                      stepNumber: i + 1,
+                      instruction: step
+                    })));
+                    setCurrentStepIndex(0);
+                    setFlowStep('cooking');
+                  }}
+                  className="w-full bg-gradient-to-r from-purple-500 to-purple-600 text-white py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-purple-700 transition-all"
+                >
+                  👨‍🍳 이 음식 만들기
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 조리 단계 표시 */}
+        {flowStep === 'cooking' && selectedFood && (
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-2xl font-bold text-slate-800">
+                👨‍🍳 {selectedFood.name} 만들기
+              </h3>
+              <button
+                onClick={() => {
+                  setFlowStep('recommend');
+                  setSelectedFood(null);
+                  setCurrentStepIndex(0);
+                }}
+                className="text-sm text-slate-600 hover:text-slate-800 px-4 py-2 rounded-lg hover:bg-slate-100"
+              >
+                ← 돌아가기
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 border-2 border-purple-300 shadow-lg">
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-purple-600">
+                    STEP {currentStepIndex + 1} / {cookingSteps.length}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {Math.round(((currentStepIndex + 1) / cookingSteps.length) * 100)}% 완료
+                  </span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-purple-500 to-purple-600 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${((currentStepIndex + 1) / cookingSteps.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="text-lg text-slate-800 mb-6 p-4 bg-purple-50 rounded-xl">
+                {cookingSteps[currentStepIndex]?.instruction}
+              </div>
+
+              <div className="flex gap-3">
+                {currentStepIndex < cookingSteps.length - 1 ? (
+                  <button
+                    onClick={() => setCurrentStepIndex(prev => prev + 1)}
+                    className="flex-1 bg-gradient-to-r from-purple-500 to-purple-600 text-white py-4 rounded-xl font-bold hover:from-purple-600 hover:to-purple-700 transition-all"
+                  >
+                    다음 단계 →
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      // 재료 확인 모달 띄우기
+                      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                      
+                      try {
+                        // UserIngredient에서 보유 재료 조회
+                        const ingredientsResponse = await fetch(`${apiEndpoint}/api/v1/ingredients/my-ingredients`, {
+                          credentials: 'include',
+                        });
+                        
+                        if (checkAuthAndRedirect(ingredientsResponse)) {
+                          return;
+                        }
+                        
+                        const ingredientsResult = await ingredientsResponse.json();
+                        const userIngredients = ingredientsResult.data || [];
+                        
+                        // 사용할 재료 목록 생성
+                        const ingredientsData = selectedFood.ingredients.map((ingredientName) => {
+                          const found = userIngredients.find((ing: any) => ing.ingredient_name === ingredientName && !ing.is_used);
+                          return {
+                            name: ingredientName,
+                            quantity: 1, // 기본 1개
+                            available: found ? found.count : 0
+                          };
+                        });
+                        
+                        setIngredientsWithQuantity(ingredientsData);
+                        setShowIngredientModal(true);
+                      } catch (error) {
+                        console.error('재료 조회 오류:', error);
+                        alert('재료 정보를 불러오는데 실패했습니다.');
+                      }
+                    }}
+                    className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl font-bold hover:from-green-600 hover:to-green-700 transition-all"
+                  >
+                    🎉 조리 완료 & 기록하기
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 재료 확인 모달 */}
+        {showIngredientModal && selectedFood && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6">
+              <h3 className="text-xl font-bold mb-4">사용한 재료 확인</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                실제 사용한 재료의 수량을 확인하고 조정해주세요.
+              </p>
+              
+              <div className="space-y-3 mb-6 max-h-96 overflow-y-auto">
+                {ingredientsWithQuantity.map((ingredient, index) => (
+                  <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                    <div className="flex-1">
+                      <div className="font-medium">{ingredient.name}</div>
+                      <div className="text-xs text-gray-500">보유: {ingredient.available}개</div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const newList = [...ingredientsWithQuantity];
+                          if (newList[index].quantity > 0) {
+                            newList[index].quantity -= 1;
+                            setIngredientsWithQuantity(newList);
+                          }
+                        }}
+                        className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center hover:bg-gray-300"
+                      >
+                        -
+                      </button>
+                      
+                      <span className="w-12 text-center font-bold">{ingredient.quantity}</span>
+                      
+                      <button
+                        onClick={() => {
+                          const newList = [...ingredientsWithQuantity];
+                          newList[index].quantity += 1;
+                          setIngredientsWithQuantity(newList);
+                        }}
+                        className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowIngredientModal(false)}
+                  className="flex-1 py-3 bg-gray-200 rounded-lg font-medium hover:bg-gray-300"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={async () => {
+                    // 실제 저장 함수 호출
+                    try {
+                      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                      const response = await fetch(`${apiEndpoint}/api/v1/meals/save-recommended`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                          food_name: selectedFood.name,
+                          ingredients_used: selectedFood.ingredients, // 레거시 지원
+                          ingredients_with_quantity: ingredientsWithQuantity.map(ing => ({
+                            name: ing.name,
+                            quantity: ing.quantity
+                          })),
+                          meal_type: '점심',
+                          portion_size_g: 300.0,
+                          memo: `${selectedFood.name} 조리 완료`
+                        }),
+                      });
+
+                      if (checkAuthAndRedirect(response)) {
+                        return;
+                      }
+
+                      const result = await response.json();
+
+                      if (result.success) {
+                        setShowIngredientModal(false);
+                        alert(`✅ "${selectedFood.name}" 기록 완료!\n\n건강 점수: ${result.data.health_score}점\n등급: ${result.data.food_grade}`);
+                        window.location.href = '/dashboard';
+                      } else {
+                        alert(`기록 저장 실패: ${result.message}`);
+                        setShowIngredientModal(false);
+                      }
+                    } catch (error) {
+                      console.error('❌ 음식 기록 오류:', error);
+                      alert('음식 기록 중 오류가 발생했습니다.');
+                      setShowIngredientModal(false);
+                    }
+                  }}
+                  className="flex-1 py-3 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600"
+                >
+                  저장하기
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

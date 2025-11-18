@@ -17,7 +17,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 백엔드에서 사용자 정보 가져오기
+    // 백엔드에서 사용자 정보 가져오기 (페이지 로드 시 한 번만)
     const fetchUserInfo = async () => {
       try {
         const response = await fetch('http://localhost:8000/api/v1/auth/me', {
@@ -36,16 +36,17 @@ export default function Dashboard() {
             setUserInfo(data);
           } else {
             // 로그인되지 않음
-            router.push('/');
+            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+            router.push('/login');
           }
-        } else {
+        } else if (response.status === 401 || response.status === 403) {
           // 인증 실패
-          console.error('인증 실패');
-          router.push('/');
+          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+          router.push('/login');
         }
       } catch (error) {
         console.error('사용자 정보 가져오기 실패:', error);
-        router.push('/');
+        // 네트워크 에러는 무시
       } finally {
         setLoading(false);
       }
