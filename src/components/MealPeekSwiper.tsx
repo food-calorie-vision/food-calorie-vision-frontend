@@ -7,7 +7,7 @@ type FoodPrediction = {
   name: string;
   confidence: number;
   selected: boolean;
-  ingredients?: string[]; // GPT Vision이 추출한 실제 재료
+  ingredients?: string[];
 };
 
 type UploadedImage = {
@@ -65,19 +65,18 @@ export default function MealPeekSwiper({
   );
 
   const ingredientsCandidates = useMemo<string[]>(() => {
-    if (!current) return DEFAULT_INGREDIENTS;
-    const chosen = pickedNameById[current.id] ?? nameCandidates[0];
-    if (!chosen) return DEFAULT_INGREDIENTS;
-    return INGREDIENT_PRESETS[chosen] ?? DEFAULT_INGREDIENTS;
-  }, [current, nameCandidates, pickedNameById]);
-
-  // ✅ 안전 가드: current가 없으면 아무것도 렌더하지 않음 (모든 Hooks 호출 후)
-  if (!hasItems || !current) return null;
-
-  const goNext = () => setIndex((i) => wrap(i + 1, images.length));
-  const goPrev = () => setIndex((i) => wrap(i - 1, images.length));
-
-  const phase: Phase = phaseById[current.id] ?? 'name';
+    // 선택된 음식의 실제 재료 가져오기 (GPT Vision 추출)
+    const chosenName = pickedNameById[current.id] ?? nameCandidates[0];
+    if (!chosenName) return [];
+    
+    const selectedPrediction = current.predictions?.find((p) => p.name === chosenName);
+    const ingredients = selectedPrediction?.ingredients ?? [];
+    
+    // 빈 값, "-", 공백 제거 및 중복 제거
+    return ingredients
+      .filter((ing) => ing && ing.trim() !== '' && ing.trim() !== '-')
+      .filter((ing, index, self) => self.indexOf(ing) === index); // 중복 제거
+  }, [current.id, current.predictions, nameCandidates, pickedNameById]);
 
   const chooseName = (n: string) =>
     setPickedNameById((prev) => ({ ...prev, [current.id]: n }));
@@ -229,7 +228,7 @@ export default function MealPeekSwiper({
                   <div className="flex-shrink-0 mb-3">
                     <p className="text-sm text-slate-600 mb-2">업로드한 음식은</p>
                     <p className="text-lg font-bold text-slate-900">
-                      <span className="text-green-600">{nameCandidates[0]}</span> 인 것으로 보입니다.
+                      <span className="text-green-600">{nameCandidates[0]}</span> 로 보입니다.
                     </p>
                     {nameCandidates.length > 1 && (
                       <p className="text-xs text-slate-500 mt-1">다른 후보를 선택하려면 아래에서 골라주세요</p>

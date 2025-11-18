@@ -285,7 +285,7 @@ export default function SignupPage() {
               </div>
 
               {/* 안내 메시지 */}
-              <div className="bg-slate-50 p-4 rounded-lg">
+              {/* <div className="bg-slate-50 p-4 rounded-lg">
                 <p className="text-slate-600 text-sm">
                   <strong>📝 변경사항:</strong>
                   <br />
@@ -294,7 +294,7 @@ export default function SignupPage() {
                   - 건강 정보는 추후 대시보드에서 입력 가능합니다.
                   <br />- User ID는 자동 생성됩니다.
                 </p>
-              </div>
+              </div> */}
             </div>
           </div>
 

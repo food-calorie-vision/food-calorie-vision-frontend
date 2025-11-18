@@ -156,6 +156,7 @@ export interface FoodCandidate {
   foodName: string;
   confidence: number; // 0.0 ~ 1.0
   description?: string;
+  ingredients?: string[]; // 각 후보의 재료
 }
 
 // 음식 이미지 분석 결과 타입
