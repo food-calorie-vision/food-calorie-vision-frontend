@@ -35,6 +35,12 @@ type DietPlan = {
     snack?: string;
   };
   nutrients?: string;
+  meal_details?: {
+    breakfast?: { calories: number; protein: number; carb: number; fat: number; };
+    lunch?: { calories: number; protein: number; carb: number; fat: number; };
+    dinner?: { calories: number; protein: number; carb: number; fat: number; };
+    snack?: { calories: number; protein: number; carb: number; fat: number; };
+  };
 };
 
 // 챗봇 초기 안내 메시지
@@ -376,7 +382,8 @@ export default function RecommendPage() {
             dinner: plan.meals.dinner,
             snack: plan.meals.snack
           },
-          nutrients: plan.nutrients
+          nutrients: plan.nutrients,
+          meal_details: plan.meal_details  // 끼니별 상세 정보 추가
         }));
         
         setRecommendedDietPlans(dietPlans);
@@ -493,81 +500,95 @@ export default function RecommendPage() {
       const authData = await authRes.json();
       const userId = authData.user_id;
 
-      // 전체 영양소 파싱
-      const totalNutrients = parseNutrients(selectedDietPlan.nutrients || '');
-      const totalCalories = parseCalories(selectedDietPlan.totalCalories || '0');
+      // meal_details가 있으면 실제 칼로리 사용, 없으면 fallback (균등 분배)
+      const useMealDetails = selectedDietPlan.meal_details && Object.keys(selectedDietPlan.meal_details).length > 0;
       
-      // 끼니별로 비율 계산 (균등 분배 - 추후 개선 가능)
-      const mealCount = [
-        selectedDietPlan.meals.breakfast,
-        selectedDietPlan.meals.lunch,
-        selectedDietPlan.meals.dinner,
-        selectedDietPlan.meals.snack
-      ].filter(Boolean).length;
+      // Fallback용: 전체 영양소 파싱 및 균등 분배
+      let fallbackCaloriesPerMeal = 0;
+      let fallbackProteinPerMeal = 0;
+      let fallbackCarbPerMeal = 0;
+      let fallbackFatPerMeal = 0;
       
-      const caloriesPerMeal = mealCount > 0 ? totalCalories / mealCount : 0;
-      const proteinPerMeal = mealCount > 0 ? totalNutrients.protein / mealCount : 0;
-      const carbPerMeal = mealCount > 0 ? totalNutrients.carb / mealCount : 0;
-      const fatPerMeal = mealCount > 0 ? totalNutrients.fat / mealCount : 0;
+      if (!useMealDetails) {
+        const totalNutrients = parseNutrients(selectedDietPlan.nutrients || '');
+        const totalCalories = parseCalories(selectedDietPlan.totalCalories || '0');
+        
+        const mealCount = [
+          selectedDietPlan.meals.breakfast,
+          selectedDietPlan.meals.lunch,
+          selectedDietPlan.meals.dinner,
+          selectedDietPlan.meals.snack
+        ].filter(Boolean).length;
+        
+        fallbackCaloriesPerMeal = mealCount > 0 ? totalCalories / mealCount : 0;
+        fallbackProteinPerMeal = mealCount > 0 ? totalNutrients.protein / mealCount : 0;
+        fallbackCarbPerMeal = mealCount > 0 ? totalNutrients.carb / mealCount : 0;
+        fallbackFatPerMeal = mealCount > 0 ? totalNutrients.fat / mealCount : 0;
+        
+        console.log('⚠️ meal_details 없음 - Fallback 균등 분배 사용', { fallbackCaloriesPerMeal, fallbackProteinPerMeal });
+      } else {
+        console.log('✅ meal_details 사용 - 실제 끼니별 칼로리 사용', selectedDietPlan.meal_details);
+      }
 
       // 식단 저장 요청 데이터 구성
       const meals = [];
       
-      const mealTypeMap: Record<string, string> = {
-        '아침': 'breakfast',
-        '점심': 'lunch',
-        '저녁': 'dinner',
-        '간식': 'snack'
-      };
-      
+      // 아침
       if (selectedDietPlan.meals.breakfast) {
+        const details = useMealDetails ? selectedDietPlan.meal_details?.breakfast : null;
         meals.push({
           food_name: `${selectedDietPlan.name} - 아침`,
           meal_type: 'breakfast',
           ingredients: selectedDietPlan.meals.breakfast.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
-          calories: caloriesPerMeal,
-          protein: proteinPerMeal,
-          carb: carbPerMeal,
-          fat: fatPerMeal,
+          calories: details?.calories || fallbackCaloriesPerMeal,
+          protein: details?.protein || fallbackProteinPerMeal,
+          carb: details?.carb || fallbackCarbPerMeal,
+          fat: details?.fat || fallbackFatPerMeal,
           consumed_at: new Date().toISOString()
         });
       }
       
+      // 점심
       if (selectedDietPlan.meals.lunch) {
+        const details = useMealDetails ? selectedDietPlan.meal_details?.lunch : null;
         meals.push({
           food_name: `${selectedDietPlan.name} - 점심`,
           meal_type: 'lunch',
           ingredients: selectedDietPlan.meals.lunch.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
-          calories: caloriesPerMeal,
-          protein: proteinPerMeal,
-          carb: carbPerMeal,
-          fat: fatPerMeal,
+          calories: details?.calories || fallbackCaloriesPerMeal,
+          protein: details?.protein || fallbackProteinPerMeal,
+          carb: details?.carb || fallbackCarbPerMeal,
+          fat: details?.fat || fallbackFatPerMeal,
           consumed_at: new Date().toISOString()
         });
       }
       
+      // 저녁
       if (selectedDietPlan.meals.dinner) {
+        const details = useMealDetails ? selectedDietPlan.meal_details?.dinner : null;
         meals.push({
           food_name: `${selectedDietPlan.name} - 저녁`,
           meal_type: 'dinner',
           ingredients: selectedDietPlan.meals.dinner.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
-          calories: caloriesPerMeal,
-          protein: proteinPerMeal,
-          carb: carbPerMeal,
-          fat: fatPerMeal,
+          calories: details?.calories || fallbackCaloriesPerMeal,
+          protein: details?.protein || fallbackProteinPerMeal,
+          carb: details?.carb || fallbackCarbPerMeal,
+          fat: details?.fat || fallbackFatPerMeal,
           consumed_at: new Date().toISOString()
         });
       }
       
+      // 간식
       if (selectedDietPlan.meals.snack) {
+        const details = useMealDetails ? selectedDietPlan.meal_details?.snack : null;
         meals.push({
           food_name: `${selectedDietPlan.name} - 간식`,
           meal_type: 'snack',
           ingredients: selectedDietPlan.meals.snack.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
-          calories: caloriesPerMeal,
-          protein: proteinPerMeal,
-          carb: carbPerMeal,
-          fat: fatPerMeal,
+          calories: details?.calories || fallbackCaloriesPerMeal,
+          protein: details?.protein || fallbackProteinPerMeal,
+          carb: details?.carb || fallbackCarbPerMeal,
+          fat: details?.fat || fallbackFatPerMeal,
           consumed_at: new Date().toISOString()
         });
       }
