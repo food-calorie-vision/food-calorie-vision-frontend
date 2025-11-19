@@ -62,6 +62,12 @@ type DietPlan = {
     snack?: string;
   };
   nutrients?: string;
+  meal_details?: {
+    breakfast?: { calories: number; protein: number; carb: number; fat: number; };
+    lunch?: { calories: number; protein: number; carb: number; fat: number; };
+    dinner?: { calories: number; protein: number; carb: number; fat: number; };
+    snack?: { calories: number; protein: number; carb: number; fat: number; };
+  };
 };
 
 // 음식 이름에서 분류 추론하는 함수
@@ -154,6 +160,15 @@ export default function RecommendPage() {
   const [dietLoading, setDietLoading] = useState(false);
   const [recommendedDietPlans, setRecommendedDietPlans] = useState<DietPlan[]>([]);
   const [selectedDietPlan, setSelectedDietPlan] = useState<DietPlan | null>(null);
+  
+  // 식단 추천 메타데이터 (저장용)
+  const [dietMetadata, setDietMetadata] = useState<{
+    bmr?: number;
+    tdee?: number;
+    targetCalories?: number;
+    healthGoal?: string;
+    healthGoalKr?: string;
+  } | null>(null);
   
   // 모달 상태
   const [showModal, setShowModal] = useState(false);
@@ -658,10 +673,20 @@ export default function RecommendPage() {
             dinner: plan.meals.dinner,
             snack: plan.meals.snack
           },
-          nutrients: plan.nutrients
+          nutrients: plan.nutrients,
+          meal_details: plan.meal_details  // 끼니별 상세 정보 추가
         }));
         
         setRecommendedDietPlans(dietPlans);
+        
+        // 메타데이터 저장 (저장 시 사용)
+        setDietMetadata({
+          bmr: responseData.bmr,
+          tdee: responseData.tdee,
+          targetCalories: responseData.targetCalories,
+          healthGoal: responseData.healthGoal,
+          healthGoalKr: responseData.healthGoalKr
+        });
         
         // 봇 응답 메시지 생성
         const botMessage = `✅ 사용자 정보 바탕으로 추천된 식단 리스트 입니다.
@@ -705,7 +730,37 @@ export default function RecommendPage() {
     setDietFlowStep("complete");
   };
 
-  // 식단 저장하기
+  // 영양소 파싱 헬퍼 함수
+  const parseNutrients = (nutrientsStr: string) => {
+    // "단백질 120g / 탄수화물 150g / 지방 45g" 형식 파싱
+    const defaultValues = { protein: 0, carb: 0, fat: 0 };
+    
+    if (!nutrientsStr) return defaultValues;
+    
+    try {
+      const proteinMatch = nutrientsStr.match(/단백질\s*(\d+(?:\.\d+)?)\s*g/);
+      const carbMatch = nutrientsStr.match(/탄수화물\s*(\d+(?:\.\d+)?)\s*g/);
+      const fatMatch = nutrientsStr.match(/지방\s*(\d+(?:\.\d+)?)\s*g/);
+      
+      return {
+        protein: proteinMatch ? parseFloat(proteinMatch[1]) : 0,
+        carb: carbMatch ? parseFloat(carbMatch[1]) : 0,
+        fat: fatMatch ? parseFloat(fatMatch[1]) : 0,
+      };
+    } catch (error) {
+      console.warn('영양소 파싱 실패:', error);
+      return defaultValues;
+    }
+  };
+
+  // 총 칼로리 파싱 헬퍼 함수
+  const parseCalories = (caloriesStr: string) => {
+    // "1500 kcal" 형식에서 숫자만 추출
+    const match = caloriesStr.match(/(\d+(?:\.\d+)?)/);
+    return match ? parseFloat(match[1]) : 0;
+  };
+
+  // 식단 저장하기 (추천 식단 전용 API 사용)
   const saveDietPlan = async () => {
     if (!selectedDietPlan) return;
     
@@ -736,58 +791,128 @@ export default function RecommendPage() {
       const authData = await authRes.json();
       const userId = authData.user_id;
 
-      // 식단 저장 API 호출 (식사별로 개별 저장)
+      // meal_details가 있으면 실제 칼로리 사용, 없으면 fallback (균등 분배)
+      const useMealDetails = selectedDietPlan.meal_details && Object.keys(selectedDietPlan.meal_details).length > 0;
+      
+      // Fallback용: 전체 영양소 파싱 및 균등 분배
+      let fallbackCaloriesPerMeal = 0;
+      let fallbackProteinPerMeal = 0;
+      let fallbackCarbPerMeal = 0;
+      let fallbackFatPerMeal = 0;
+      
+      if (!useMealDetails) {
+        const totalNutrients = parseNutrients(selectedDietPlan.nutrients || '');
+        const totalCalories = parseCalories(selectedDietPlan.totalCalories || '0');
+        
+        const mealCount = [
+          selectedDietPlan.meals.breakfast,
+          selectedDietPlan.meals.lunch,
+          selectedDietPlan.meals.dinner,
+          selectedDietPlan.meals.snack
+        ].filter(Boolean).length;
+        
+        fallbackCaloriesPerMeal = mealCount > 0 ? totalCalories / mealCount : 0;
+        fallbackProteinPerMeal = mealCount > 0 ? totalNutrients.protein / mealCount : 0;
+        fallbackCarbPerMeal = mealCount > 0 ? totalNutrients.carb / mealCount : 0;
+        fallbackFatPerMeal = mealCount > 0 ? totalNutrients.fat / mealCount : 0;
+        
+        console.log('⚠️ meal_details 없음 - Fallback 균등 분배 사용', { fallbackCaloriesPerMeal, fallbackProteinPerMeal });
+      } else {
+        console.log('✅ meal_details 사용 - 실제 끼니별 칼로리 사용', selectedDietPlan.meal_details);
+      }
+
+      // 식단 저장 요청 데이터 구성
       const meals = [];
       
+      // 아침
       if (selectedDietPlan.meals.breakfast) {
-        meals.push({ type: '아침', name: selectedDietPlan.meals.breakfast });
+        const details = useMealDetails ? selectedDietPlan.meal_details?.breakfast : null;
+        meals.push({
+          food_name: `${selectedDietPlan.name} - 아침`,
+          meal_type: 'breakfast',
+          ingredients: selectedDietPlan.meals.breakfast.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
+          calories: details?.calories || fallbackCaloriesPerMeal,
+          protein: details?.protein || fallbackProteinPerMeal,
+          carb: details?.carb || fallbackCarbPerMeal,
+          fat: details?.fat || fallbackFatPerMeal,
+          consumed_at: new Date().toISOString()
+        });
       }
+      
+      // 점심
       if (selectedDietPlan.meals.lunch) {
-        meals.push({ type: '점심', name: selectedDietPlan.meals.lunch });
+        const details = useMealDetails ? selectedDietPlan.meal_details?.lunch : null;
+        meals.push({
+          food_name: `${selectedDietPlan.name} - 점심`,
+          meal_type: 'lunch',
+          ingredients: selectedDietPlan.meals.lunch.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
+          calories: details?.calories || fallbackCaloriesPerMeal,
+          protein: details?.protein || fallbackProteinPerMeal,
+          carb: details?.carb || fallbackCarbPerMeal,
+          fat: details?.fat || fallbackFatPerMeal,
+          consumed_at: new Date().toISOString()
+        });
       }
+      
+      // 저녁
       if (selectedDietPlan.meals.dinner) {
-        meals.push({ type: '저녁', name: selectedDietPlan.meals.dinner });
+        const details = useMealDetails ? selectedDietPlan.meal_details?.dinner : null;
+        meals.push({
+          food_name: `${selectedDietPlan.name} - 저녁`,
+          meal_type: 'dinner',
+          ingredients: selectedDietPlan.meals.dinner.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
+          calories: details?.calories || fallbackCaloriesPerMeal,
+          protein: details?.protein || fallbackProteinPerMeal,
+          carb: details?.carb || fallbackCarbPerMeal,
+          fat: details?.fat || fallbackFatPerMeal,
+          consumed_at: new Date().toISOString()
+        });
       }
+      
+      // 간식
       if (selectedDietPlan.meals.snack) {
-        meals.push({ type: '간식', name: selectedDietPlan.meals.snack });
+        const details = useMealDetails ? selectedDietPlan.meal_details?.snack : null;
+        meals.push({
+          food_name: `${selectedDietPlan.name} - 간식`,
+          meal_type: 'snack',
+          ingredients: selectedDietPlan.meals.snack.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
+          calories: details?.calories || fallbackCaloriesPerMeal,
+          protein: details?.protein || fallbackProteinPerMeal,
+          carb: details?.carb || fallbackCarbPerMeal,
+          fat: details?.fat || fallbackFatPerMeal,
+          consumed_at: new Date().toISOString()
+        });
       }
 
-      const savePromises = meals.map(async (meal) => {
-        try {
-          const response = await fetch(`${apiEndpoint}/api/v1/food/save-food`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              userId: userId,
-              foodName: `${selectedDietPlan.name} - ${meal.type}`,
-              ingredients: meal.name.split('+').map(s => s.trim()), // 간단한 재료 추출
-              portionSizeG: 100,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const result = await response.json();
-          return { success: true, meal: meal.type, data: result };
-        } catch (error) {
-          console.error(`❌ ${meal.type} 저장 실패:`, error);
-          return { success: false, meal: meal.type, error };
-        }
+      // 추천 식단 전용 저장 API 호출
+      const response = await fetch(`${apiEndpoint}/api/v1/recommend/save-diet-plan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          user_id: userId,
+          diet_plan_name: selectedDietPlan.name,
+          description: selectedDietPlan.description,
+          // 메타데이터 추가
+          bmr: dietMetadata?.bmr,
+          tdee: dietMetadata?.tdee,
+          target_calories: dietMetadata?.targetCalories,
+          health_goal: dietMetadata?.healthGoal,
+          meals: meals
+        }),
       });
 
-      const results = await Promise.all(savePromises);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
       
-      // 결과 확인
-      const successCount = results.filter(r => r.success).length;
-      const failCount = results.filter(r => !r.success).length;
-      
-      if (failCount === 0) {
-        setModalMessage(`🎉 "${selectedDietPlan.name}" 식단이 성공적으로 저장되었습니다!\n\n저장된 식사: ${successCount}개`);
+      if (result.success) {
+        setModalMessage(`🎉 "${selectedDietPlan.name}" 식단이 성공적으로 저장되었습니다!\n\n저장된 식사: ${result.data.saved_count}개`);
         setShowModal(true);
         
         // 3초 후 대시보드로 이동
@@ -795,12 +920,11 @@ export default function RecommendPage() {
           router.push('/dashboard');
         }, 3000);
       } else {
-        setModalMessage(`⚠️ 일부 식사 저장에 실패했습니다.\n성공: ${successCount}개, 실패: ${failCount}개`);
-        setShowModal(true);
+        throw new Error(result.message || '저장 실패');
       }
     } catch (error) {
       console.error('❌ 식단 저장 중 오류:', error);
-      setModalMessage('❌ 식단 저장 중 오류가 발생했습니다.');
+      setModalMessage(`❌ 식단 저장 중 오류가 발생했습니다.\n\n${error instanceof Error ? error.message : '알 수 없는 오류'}`);
       setShowModal(true);
     } finally {
       setIsSaving(false);
