@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Award, TrendingUp } from 'lucide-react';
+import { Award, TrendingUp, TrendingDown } from 'lucide-react';
 import Link from 'next/link';
 import { translateHealthGoal } from '@/utils/healthGoalTranslator';
 import { ScoreData } from '@/types';
@@ -31,11 +31,15 @@ const MyScore = ({ userInfo }: MyScoreProps) => {
           
           if (result.success && result.data) {
             const avgScore = Math.round(result.data.avg_health_score);
+            const previousScore = result.data.previous_day_score ? Math.round(result.data.previous_day_score) : null;
+            const scoreChange = result.data.score_change !== null && result.data.score_change !== undefined 
+              ? Math.round(result.data.score_change) 
+              : null;
             
             setScoreData({
               todayScore: avgScore,
-              previousScore: avgScore - 5, // TODO: 실제 전날 점수 계산
-              scoreChange: 5, // TODO: 실제 변화량 계산
+              previousScore: previousScore || 0,
+              scoreChange: scoreChange || 0,
               feedback: avgScore >= 75 ? "훌륭한 식습관을 유지하고 있어요!" : 
                        avgScore >= 50 ? "좋은 식습관이에요. 조금만 더 노력해봐요!" :
                        "식습관 개선이 필요해요. 건강한 음식을 선택해보세요!",
@@ -143,11 +147,17 @@ const MyScore = ({ userInfo }: MyScoreProps) => {
           </div>
         )}
         
-        {/* 점수 변화 (점수가 있을 때만) */}
-        {scoreData.todayScore > 0 && (
+        {/* 점수 변화 (점수가 있고 전날 데이터가 있을 때만) */}
+        {scoreData.todayScore > 0 && scoreData.previousScore > 0 && (
           <div className="flex items-center justify-center mb-4">
-            <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-            <span className="text-sm text-gray-600">
+            {scoreData.scoreChange > 0 ? (
+              <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+            ) : scoreData.scoreChange < 0 ? (
+              <TrendingDown className="w-4 h-4 text-red-500 mr-1" />
+            ) : (
+              <TrendingUp className="w-4 h-4 text-gray-400 mr-1" />
+            )}
+            <span className={`text-sm ${scoreData.scoreChange > 0 ? 'text-green-600' : scoreData.scoreChange < 0 ? 'text-red-600' : 'text-gray-600'}`}>
               전날 대비 ({scoreData.scoreChange > 0 ? '+' : ''}{scoreData.scoreChange}점)
             </span>
           </div>
