@@ -1,7 +1,9 @@
-// src/app/settings/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import MobileHeader from '@/components/MobileHeader';
+import MobileNav from '@/components/MobileNav';
 
 /* ===== Types ===== */
 type Allergy = { id: string; name: string };
@@ -19,6 +21,7 @@ function emojiForAllergy(name: string) {
   if (n.includes('대두') || n.includes('soy')) return '🫘';
   return '⚠️';
 }
+
 const toast = (msg: string) => {
   const el = document.createElement('div');
   el.textContent = msg;
@@ -29,6 +32,14 @@ const toast = (msg: string) => {
 };
 
 export default function SettingsPage() {
+  const router = useRouter();
+
+  // 헤더용 로그인 상태
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // 설정 상태
   const [allergies, setAllergies] = useState<Allergy[]>([
     { id: 'peanut', name: '땅콩' },
     { id: 'milk', name: '우유' },
@@ -51,37 +62,83 @@ export default function SettingsPage() {
   const [formPwd, setFormPwd] = useState('');
   const [formNewPwd, setFormNewPwd] = useState('');
 
+  // 1) 로그인 상태 가져오기
   useEffect(() => {
-    const raw = localStorage.getItem('settings-demo'); // 미리보기 저장 키 그대로 사용
+    const fetchUserInfo = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/auth/me', {
+          method: 'GET',
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('설정 페이지 사용자 정보:', data);
+
+          if (data.user_id) {
+            setIsLoggedIn(true);
+            setUserName(data.nickname || data.username);
+          } else {
+            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+            router.push('/login');
+          }
+        } else if (response.status === 401 || response.status === 403) {
+          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+          router.push('/login');
+        }
+      } catch (error) {
+        console.error('설정 페이지 사용자 정보 가져오기 실패:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserInfo();
+  }, [router]);
+
+  // 2) 로컬 저장된 설정 값 불러오기
+  useEffect(() => {
+    const raw = localStorage.getItem('settings-demo');
     if (!raw) return;
     try {
       const s = JSON.parse(raw);
+
       if (Array.isArray(s.allergies)) {
         setAllergies(
-          s.allergies.map((x: any) => ({
-            id: String(x.id ?? x.name ?? '').toLowerCase(),
-            name: String(x.name ?? x.id ?? ''),
-          })).filter((x: Allergy) => x.id && x.name)
+          s.allergies
+            .map((x: any) => ({
+              id: String(x.id ?? x.name ?? '').toLowerCase(),
+              name: String(x.name ?? x.id ?? ''),
+            }))
+            .filter((x: Allergy) => x.id && x.name),
         );
       }
+
       if (Array.isArray(s.diseases)) {
-        setDiseases(reindex(s.diseases.map((x: any, i: number) => ({
-          id: String(x.id ?? x.name ?? '').toLowerCase(),
-          name: String(x.name ?? x.id ?? ''),
-          priority: Number.isFinite(x.priority) ? x.priority : i + 1,
-        }))));
+        setDiseases(
+          reindex(
+            s.diseases.map((x: any, i: number) => ({
+              id: String(x.id ?? x.name ?? '').toLowerCase(),
+              name: String(x.name ?? x.id ?? ''),
+              priority: Number.isFinite(x.priority) ? x.priority : i + 1,
+            })),
+          ),
+        );
       }
+
       if (typeof s.mealNoti === 'boolean') setMealNoti(s.mealNoti);
       if (typeof s.calorieNoti === 'boolean') setCalorieNoti(s.calorieNoti);
       if (typeof s.allergyNoti === 'boolean') setAllergyNoti(s.allergyNoti);
       if (s.nickname) setNickname(s.nickname);
-    } catch {}
+    } catch {
+      // JSON 파싱 실패 시 무시
+    }
   }, []);
 
   const persist = () =>
     localStorage.setItem(
       'settings-demo',
-      JSON.stringify({ allergies, diseases, mealNoti, calorieNoti, allergyNoti, nickname })
+      JSON.stringify({ allergies, diseases, mealNoti, calorieNoti, allergyNoti, nickname }),
     );
 
   const onAddAllergy = () => {
@@ -105,7 +162,8 @@ export default function SettingsPage() {
     setInputName('');
     setOpenAddDisease(false);
   };
-  const removeDisease = (id: string) => setDiseases((p) => reindex(p.filter((d) => d.id !== id)));
+  const removeDisease = (id: string) =>
+    setDiseases((p) => reindex(p.filter((d) => d.id !== id)));
 
   function moveDisease(viewIdx: number, dir: 'up' | 'down') {
     const sorted = [...diseases].sort((a, b) => a.priority - b.priority);
@@ -120,9 +178,17 @@ export default function SettingsPage() {
     return list.map((d, i) => ({ ...d, priority: i + 1 }));
   }
 
-  const saveAll = () => { persist(); toast('설정이 저장되었습니다.'); };
+  const saveAll = () => {
+    persist();
+    toast('설정이 저장되었습니다.');
+  };
 
-  const openEditAccount = () => { setFormNick(nickname); setFormPwd(''); setFormNewPwd(''); setOpenAccountModal(true); };
+  const openEditAccount = () => {
+    setFormNick(nickname);
+    setFormPwd('');
+    setFormNewPwd('');
+    setOpenAccountModal(true);
+  };
   const saveAccount = () => {
     if (!formNick.trim()) return toast('닉네임을 입력하세요.');
     if ((formPwd && !formNewPwd) || (!formPwd && formNewPwd))
@@ -133,96 +199,203 @@ export default function SettingsPage() {
     toast('계정 정보가 저장되었습니다.');
   };
 
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        setIsLoggedIn(false);
+        setUserName('');
+        sessionStorage.removeItem('login_expire');
+        sessionStorage.removeItem('user_name');
+        sessionStorage.removeItem('user_id');
+        alert('로그아웃되었습니다.');
+        router.push('/');
+      } else {
+        console.error('로그아웃 실패');
+        alert('로그아웃에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('로그아웃 에러:', error);
+      alert('로그아웃 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 로딩 중일 때
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-xl text-gray-600">로딩 중...</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="sticky top-0 z-30 bg-white border-b">
-        <div className="max-w-md mx-auto flex items-center gap-3 px-4 h-12">
-          <button onClick={() => history.back()} className="text-gray-600 hover:text-gray-900" aria-label="뒤로가기">←</button>
-          <h1 className="font-semibold">설정</h1>
+    <div className="min-h-screen bg-white mobile-content">
+      {/* 상단 공통 헤더 */}
+      <MobileHeader
+        isLoggedIn={isLoggedIn}
+        userName={userName}
+        handleLogout={handleLogout}
+      />
+
+      {/* 메인 컨텐츠 */}
+      <main className="max-w-md mx-auto px-4 py-6 pb-20">
+        {/* 설정 페이지 타이틀 영역 */}
+        <div className="mb-6 text-center">
+          <div className="text-4xl mb-2">⚙️</div>
+          <h1 className="text-xl font-bold text-gray-900">설정</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            건강 정보, 알림, 계정 설정을 관리해 보세요.
+          </p>
         </div>
-      </div>
 
-      <div className="max-w-md mx-auto p-4 space-y-5">
-        <SectionCard title="건강 정보" subtitle="알러지·질환 설정">
-          {/* 알러지: 이모지 + 이름 + 삭제 */}
-          <div className="space-y-2">
-            <div className="text-sm text-gray-700 font-medium">알러지 설정</div>
+        <div className="space-y-5">
+          <SectionCard title="건강 정보" subtitle="알러지·질환 설정">
+            {/* 알러지 설정 */}
             <div className="space-y-2">
-              {allergies.map((a) => (
-                <div key={a.id} className="flex items-center justify-between py-1">
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg leading-none">{emojiForAllergy(a.name)}</span>
-                    <span className="text-gray-800 text-sm">{a.name}</span>
+              <div className="text-sm text-gray-700 font-medium">알러지 설정</div>
+              <div className="space-y-2">
+                {allergies.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between py-1">
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg leading-none">{emojiForAllergy(a.name)}</span>
+                      <span className="text-gray-800 text-sm">{a.name}</span>
+                    </div>
+                    <button
+                      onClick={() => removeAllergy(a.id)}
+                      className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
+                    >
+                      삭제
+                    </button>
                   </div>
-                  <button onClick={() => removeAllergy(a.id)} className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50">삭제</button>
-                </div>
-              ))}
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  setInputName('');
+                  setOpenAddAllergy(true);
+                }}
+                className="w-full text-left text-gray-700 text-sm border rounded-lg px-3 py-3 hover:bg-gray-50"
+              >
+                + 기타 알러지 추가
+              </button>
             </div>
-            <button onClick={() => { setInputName(''); setOpenAddAllergy(true); }}
-              className="w-full text-left text-gray-700 text-sm border rounded-lg px-3 py-3 hover:bg-gray-50">
-              + 기타 알러지 추가
-            </button>
-          </div>
 
-          <hr className="my-4 border-dashed" />
+            <hr className="my-4 border-dashed" />
 
-          {/* 질환: 우선순위 + ▲/▼ + 삭제 */}
-          <div className="space-y-2">
-            <div className="text-sm text-gray-700 font-medium">질환 설정</div>
+            {/* 질환 설정 */}
             <div className="space-y-2">
-              {[...diseases].sort((a,b)=>a.priority-b.priority).map((d, viewIdx) => (
-                <div key={d.id} className="flex items-center justify-between py-1">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">{d.priority}</span>
-                    <span className="text-gray-800 text-sm">{d.name}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => moveDisease(viewIdx,'up')} className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50" aria-label="위로">▲</button>
-                    <button onClick={() => moveDisease(viewIdx,'down')} className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50" aria-label="아래로">▼</button>
-                    <button onClick={() => removeDisease(d.id)} className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50">삭제</button>
-                  </div>
-                </div>
-              ))}
+              <div className="text-sm text-gray-700 font-medium">질환 설정</div>
+              <div className="space-y-2">
+                {[...diseases]
+                  .sort((a, b) => a.priority - b.priority)
+                  .map((d, viewIdx) => (
+                    <div key={d.id} className="flex items-center justify-between py-1">
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+                          {d.priority}
+                        </span>
+                        <span className="text-gray-800 text-sm">{d.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => moveDisease(viewIdx, 'up')}
+                          className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50"
+                          aria-label="위로"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={() => moveDisease(viewIdx, 'down')}
+                          className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50"
+                          aria-label="아래로"
+                        >
+                          ▼
+                        </button>
+                        <button
+                          onClick={() => removeDisease(d.id)}
+                          className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+              <button
+                onClick={() => {
+                  setInputName('');
+                  setOpenAddDisease(true);
+                }}
+                className="w-full text-left text-gray-700 text-sm border rounded-lg px-3 py-3 hover:bg-gray-50"
+              >
+                + 기타 질환 추가
+              </button>
             </div>
-            <button onClick={() => { setInputName(''); setOpenAddDisease(true); }}
-              className="w-full text-left text-gray-700 text-sm border rounded-lg px-3 py-3 hover:bg-gray-50">
-              + 기타 질환 추가
-            </button>
-          </div>
-        </SectionCard>
+          </SectionCard>
 
-        <SectionCard title="알림 설정" subtitle="식단/칼로리/알러지 푸시">
-          <ToggleRow label="식단 등록 알림" checked={mealNoti} onChange={setMealNoti} />
-          <ToggleRow label="하루 목표 칼로리 초과 시 알림" checked={calorieNoti} onChange={setCalorieNoti} />
-          <ToggleRow label="알러지 포함 식품 감지 시 알림" checked={allergyNoti} onChange={setAllergyNoti} />
-        </SectionCard>
+          <SectionCard title="알림 설정" subtitle="식단/칼로리/알러지 푸시">
+            <ToggleRow label="식단 등록 알림" checked={mealNoti} onChange={setMealNoti} />
+            <ToggleRow
+              label="하루 목표 칼로리 초과 시 알림"
+              checked={calorieNoti}
+              onChange={setCalorieNoti}
+            />
+            <ToggleRow
+              label="알러지 포함 식품 감지 시 알림"
+              checked={allergyNoti}
+              onChange={setAllergyNoti}
+            />
+          </SectionCard>
 
-        <SectionCard title="계정" subtitle="닉네임/비밀번호">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-700">닉네임 <span className="text-gray-500">{nickname}</span></div>
-            <button onClick={() => { setFormNick(nickname); setOpenAccountModal(true); }}
-              className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">
-              계정 수정
-            </button>
-          </div>
-        </SectionCard>
+          <SectionCard title="계정" subtitle="닉네임/비밀번호">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                닉네임 <span className="text-gray-500">{nickname}</span>
+              </div>
+              <button
+                onClick={openEditAccount}
+                className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                계정 수정
+              </button>
+            </div>
+          </SectionCard>
 
-        <button onClick={saveAll} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl py-3">
-          변경사항 저장하기
-        </button>
-      </div>
+          <button
+            onClick={saveAll}
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl py-3"
+          >
+            변경사항 저장하기
+          </button>
+        </div>
+      </main>
 
       {/* Bottom Sheet: 알러지/질환 추가 */}
       {openAddAllergy && (
         <BottomSheet title="알러지 추가" onClose={() => setOpenAddAllergy(false)}>
-          <AddNameForm placeholder="예: 갑각류" value={inputName} onChange={setInputName}
-            onCancel={() => setOpenAddAllergy(false)} onConfirm={onAddAllergy}/>
+          <AddNameForm
+            placeholder="예: 갑각류"
+            value={inputName}
+            onChange={setInputName}
+            onCancel={() => setOpenAddAllergy(false)}
+            onConfirm={onAddAllergy}
+          />
         </BottomSheet>
       )}
       {openAddDisease && (
         <BottomSheet title="질환 추가" onClose={() => setOpenAddDisease(false)}>
-          <AddNameForm placeholder="예: 갑상선 질환" value={inputName} onChange={setInputName}
-            onCancel={() => setOpenAddDisease(false)} onConfirm={onAddDisease}/>
+          <AddNameForm
+            placeholder="예: 갑상선 질환"
+            value={inputName}
+            onChange={setInputName}
+            onCancel={() => setOpenAddDisease(false)}
+            onConfirm={onAddDisease}
+          />
         </BottomSheet>
       )}
 
@@ -232,34 +405,71 @@ export default function SettingsPage() {
           <div className="space-y-3">
             <div>
               <label className="block text-sm text-gray-700 mb-1">닉네임</label>
-              <input value={formNick} onChange={(e) => setFormNick(e.target.value)}
+              <input
+                value={formNick}
+                onChange={(e) => setFormNick(e.target.value)}
                 className="w-full border rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="닉네임을 입력하세요"/>
+                placeholder="닉네임을 입력하세요"
+              />
             </div>
             <div className="text-xs text-gray-500">비밀번호 변경(선택)</div>
             <div>
               <label className="block text-sm text-gray-700 mb-1">현재 비밀번호</label>
-              <input type="password" value={formPwd} onChange={(e) => setFormPwd(e.target.value)}
-                className="w-full border rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="현재 비밀번호"/>
+              <input
+                type="password"
+                value={formPwd}
+                onChange={(e) => setFormPwd(e.target.value)}
+                className="w-full border rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="현재 비밀번호"
+              />
             </div>
             <div>
               <label className="block text-sm text-gray-700 mb-1">새 비밀번호</label>
-              <input type="password" value={formNewPwd} onChange={(e) => setFormNewPwd(e.target.value)}
-                className="w-full border rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="새 비밀번호"/>
+              <input
+                type="password"
+                value={formNewPwd}
+                onChange={(e) => setFormNewPwd(e.target.value)}
+                className="w-full border rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="새 비밀번호"
+              />
             </div>
             <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setOpenAccountModal(false)} className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50">취소</button>
-              <button onClick={() => { setOpenAccountModal(false); saveAccount(); }} className="px-4 py-2 text-sm rounded-lg text-white bg-green-500 hover:bg-green-600">저장</button>
+              <button
+                onClick={() => setOpenAccountModal(false)}
+                className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  setOpenAccountModal(false);
+                  saveAccount();
+                }}
+                className="px-4 py-2 text-sm rounded-lg text-white bg-green-500 hover:bg-green-600"
+              >
+                저장
+              </button>
             </div>
           </div>
         </CenterModal>
       )}
+
+      {/* 하단 모바일 네비게이션 */}
+      <MobileNav />
     </div>
   );
 }
 
 /* ===== Reusable UI ===== */
-function SectionCard({ title, subtitle, children }:{title:string;subtitle?:string;children:React.ReactNode;}) {
+function SectionCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
       <div className="mb-3">
@@ -270,55 +480,147 @@ function SectionCard({ title, subtitle, children }:{title:string;subtitle?:strin
     </section>
   );
 }
-function ToggleRow({ label, checked, onChange }:{label:string;checked:boolean;onChange:(v:boolean)=>void;}) {
+
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <div className="flex items-center justify-between py-1">
       <span className="text-gray-800 text-sm">{label}</span>
-      <button type="button" aria-pressed={checked} onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${checked ? 'bg-green-500' : 'bg-gray-300'}`}>
-        <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+      <button
+        type="button"
+        aria-pressed={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
+          checked ? 'bg-green-500' : 'bg-gray-300'
+        }`}
+      >
+        <span
+          className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${
+            checked ? 'translate-x-6' : 'translate-x-1'
+          }`}
+        />
       </button>
     </div>
   );
 }
-function BottomSheet({ title, onClose, children }:{title:string;onClose:()=>void;children:React.ReactNode;}) {
+
+function BottomSheet({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="fixed inset-0 z-[100] bg-black/40 flex items-end" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="w-full bg-white rounded-t-2xl p-4 pb-6 shadow-lg" onClick={(e)=>e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[100] bg-black/40 flex items-end"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="w-full bg-white rounded-t-2xl p-4 pb-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mx-auto h-1.5 w-12 rounded-full bg-gray-300 mb-3" />
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-base font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-sm text-gray-500 px-2 py-1 rounded hover:bg-gray-100" aria-label="닫기">닫기</button>
+          <button
+            onClick={onClose}
+            className="text-sm text-gray-500 px-2 py-1 rounded hover:bg-gray-100"
+            aria-label="닫기"
+          >
+            닫기
+          </button>
         </div>
         {children}
       </div>
     </div>
   );
 }
-function CenterModal({ title, onClose, children }:{title:string;onClose:()=>void;children:React.ReactNode;}) {
+
+function CenterModal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-lg p-5" onClick={(e)=>e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 px-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-xl shadow-lg p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-sm text-gray-500 px-2 py-1 rounded hover:bg-gray-100" aria-label="닫기">닫기</button>
+          <button
+            onClick={onClose}
+            className="text-sm text-gray-500 px-2 py-1 rounded hover:bg-gray-100"
+            aria-label="닫기"
+          >
+            닫기
+          </button>
         </div>
         {children}
       </div>
     </div>
   );
 }
-function AddNameForm({ placeholder, value, onChange, onCancel, onConfirm }:{
-  placeholder:string; value:string; onChange:(v:string)=>void; onCancel:()=>void; onConfirm:()=>void;
+
+function AddNameForm({
+  placeholder,
+  value,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
 }) {
   return (
     <div className="space-y-3">
-      <input autoFocus value={value} onChange={(e)=>onChange(e.target.value)}
-        placeholder={placeholder} className="w-full border rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-green-500"/>
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full border rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-green-500"
+      />
       <div className="flex gap-2">
-        <button onClick={onCancel} className="flex-1 px-4 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">취소</button>
-        <button onClick={onConfirm} className="flex-1 px-4 py-3 rounded-lg text-white bg-green-500 hover:bg-green-600">추가</button>
+        <button
+          onClick={onCancel}
+          className="flex-1 px-4 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+        >
+          취소
+        </button>
+        <button
+          onClick={onConfirm}
+          className="flex-1 px-4 py-3 rounded-lg text-white bg-green-500 hover:bg-green-600"
+        >
+          추가
+        </button>
       </div>
     </div>
   );
 }
+

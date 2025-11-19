@@ -12,6 +12,7 @@ interface SignupFormData {
   gender: string;
   age: string;
   weight: string;
+  height: string;
   healthGoal: string;
 }
 
@@ -24,6 +25,7 @@ export default function SignupPage() {
     gender: 'M',
     age: '',
     weight: '',
+    height: '',
     healthGoal: 'maintain',
   });
 
@@ -59,6 +61,7 @@ export default function SignupPage() {
         gender: formData.gender || null,
         age: formData.age ? parseInt(formData.age) : null,
         weight: formData.weight ? parseFloat(formData.weight) : null,
+        height: formData.height ? parseFloat(formData.height) : null,
         health_goal: formData.healthGoal,
       };
 
@@ -240,11 +243,29 @@ export default function SignupPage() {
                   className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
                 />
               </div>
+              
+              {/* 8. 키 */}
+              <div>
+                <label className="flex items-center gap-2 text-slate-700 font-semibold mb-2">
+                  <span className="text-slate-400 text-lg">8</span>
+                  키 (선택)
+                </label>
+                <input
+                  type="number"
+                  name="height"
+                  placeholder="키 (cm)"
+                  value={formData.height}
+                  onChange={handleChange}
+                  step="0.1"
+                  min="0"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+                />
+              </div>
 
-              {/* 8. 건강 목표 */}
+              {/* 9. 건강 목표 */}
               <div>
                 <label className="flex items-center gap-2 text-slate-700 font-semibold mb-3">
-                  <span className="text-red-500 text-lg">8</span>
+                  <span className="text-red-500 text-lg">9</span>
                   건강 목표
                 </label>
                 <div className="flex gap-4">
