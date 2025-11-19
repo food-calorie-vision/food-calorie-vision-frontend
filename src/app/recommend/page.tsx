@@ -107,6 +107,11 @@ export default function RecommendPage() {
   const [dietLoading, setDietLoading] = useState(false);
   const [recommendedDietPlans, setRecommendedDietPlans] = useState<DietPlan[]>([]);
   const [selectedDietPlan, setSelectedDietPlan] = useState<DietPlan | null>(null);
+  
+  // 모달 상태
+  const [showModal, setShowModal] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   // 로그인 상태 확인 (페이지 로드 시 한 번만)
   useEffect(() => {
@@ -316,72 +321,87 @@ export default function RecommendPage() {
     setDietLoading(true);
 
     try {
-      const res = await fetch("/api/recommendations", {
+      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      
+      // 사용자 ID 가져오기
+      const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+        credentials: 'include',
+      });
+      
+      if (!authRes.ok) {
+        setDietMessages((prev) => [
+          ...prev,
+          { role: "bot", text: "⚠️ 로그인이 필요합니다. 로그인 페이지로 이동해주세요." },
+        ]);
+        setDietLoading(false);
+        return;
+      }
+      
+      const authData = await authRes.json();
+      const userId = authData.user_id;
+      
+      // 실제 백엔드 API 호출
+      const res = await fetch(`${apiEndpoint}/api/v1/recommend/diet-plan?user_id=${userId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: 'include',
         body: JSON.stringify({ 
-          message: `식단 추천 요청: ${userText}. 하루 전체 식단(아침/점심/저녁/간식)을 추천하거나, 여러 식단 옵션을 제공해주세요.` 
+          user_request: userText,
+          activity_level: "moderate"  // TODO: 사용자가 선택하도록 개선
         }),
       });
 
-      const data = await res.json();
+      const result = await res.json();
 
-      if (data.reply) {
-        // 더미 데이터로 식단 옵션 생성
-        const dietPlans: DietPlan[] = [
-          {
-            name: "고기 중심 식단 A",
-            description: "고단백 식단으로 근육 생성에 도움",
-            totalCalories: "약 1500 kcal",
-            meals: {
-              breakfast: "현미밥 1공기 + 닭가슴살 구이 100g + 시금치 무침",
-              lunch: "연어 덮밥 1인분 + 계란국",
-              dinner: "고등어 구이 1마리 + 두부조림 + 배추김치",
-              snack: "그릭요거트 1컵 + 아몬드 10알"
-            },
-            nutrients: "단백질 120g / 탄수화물 150g / 지방 45g"
+      if (result.success && result.data) {
+        const responseData = result.data;
+        
+        // API 응답을 프론트엔드 형식으로 변환
+        const dietPlans: DietPlan[] = responseData.dietPlans.map((plan: any) => ({
+          name: plan.name,
+          description: plan.description,
+          totalCalories: plan.totalCalories,
+          meals: {
+            breakfast: plan.meals.breakfast,
+            lunch: plan.meals.lunch,
+            dinner: plan.meals.dinner,
+            snack: plan.meals.snack
           },
-          {
-            name: "균형 식단 B",
-            description: "탄수화물, 단백질, 지방의 균형이 잡힌 식단",
-            totalCalories: "약 1800 kcal",
-            meals: {
-              breakfast: "토스트 2장 + 스크램블 에그 + 샐러드",
-              lunch: "소고기 된장찌개 + 밥 + 나물 반찬",
-              dinner: "닭가슴살 샐러드 + 고구마",
-              snack: "바나나 1개 + 견과류"
-            },
-            nutrients: "단백질 90g / 탄수화물 220g / 지방 55g"
-          },
-          {
-            name: "저칼로리 식단 C",
-            description: "체중 감량에 최적화된 저칼로리 식단",
-            totalCalories: "약 1200 kcal",
-            meals: {
-              breakfast: "오트밀 + 베리류 + 우유",
-              lunch: "닭가슴살 샐러드 + 통곡물 빵",
-              dinner: "두부 스테이크 + 채소 볶음",
-              snack: "사과 1개"
-            },
-            nutrients: "단백질 80g / 탄수화물 120g / 지방 30g"
-          }
-        ];
+          nutrients: plan.nutrients
+        }));
         
         setRecommendedDietPlans(dietPlans);
+        
+        // 봇 응답 메시지 생성
+        const botMessage = `✅ 사용자 정보 바탕으로 추천된 식단 리스트 입니다.
+
+📊 사용자 영양 정보:
+- 기초대사량(BMR): ${responseData.bmr.toFixed(1)} kcal/day
+- 1일 총 에너지 소비량(TDEE): ${responseData.tdee.toFixed(1)} kcal/day
+- 목표 칼로리: ${responseData.targetCalories.toFixed(1)} kcal/day
+- 건강 목표: ${responseData.healthGoalKr}
+
+아래에서 원하시는 식단을 선택해주세요! 🍽️`;
         
         // 메시지에 식단 카드 포함
         setDietMessages((prev) => [...prev, { 
           role: "bot", 
-          text: data.reply,
+          text: botMessage,
           dietCards: dietPlans
         }]);
         
         // dietFlowStep은 'chat' 상태 유지 (대화 중 선택 가능)
+      } else {
+        setDietMessages((prev) => [
+          ...prev,
+          { role: "bot", text: `❌ 식단 추천 실패: ${result.message || '알 수 없는 오류'}` },
+        ]);
       }
-    } catch (_err) {
+    } catch (error) {
+      console.error('❌ 식단 추천 오류:', error);
       setDietMessages((prev) => [
         ...prev,
-        { role: "bot", text: "서버와 통신 중 문제가 발생했습니다." },
+        { role: "bot", text: "❌ 서버와 통신 중 문제가 발생했습니다. 나중에 다시 시도해주세요." },
       ]);
     } finally {
       setDietLoading(false);
@@ -395,9 +415,105 @@ export default function RecommendPage() {
   };
 
   // 식단 저장하기
-  const saveDietPlan = () => {
-    alert(`"${selectedDietPlan?.name}"을(를) 식단에 저장했습니다!`);
-    resetDietFlow();
+  const saveDietPlan = async () => {
+    if (!selectedDietPlan) return;
+    
+    // 로그인 확인
+    if (!isLoggedIn) {
+      setModalMessage('⚠️ 로그인이 필요합니다.');
+      setShowModal(true);
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      
+      // 사용자 ID 가져오기
+      const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+        credentials: 'include',
+      });
+      
+      if (!authRes.ok) {
+        setModalMessage('⚠️ 로그인이 필요합니다.');
+        setShowModal(true);
+        setIsSaving(false);
+        return;
+      }
+      
+      const authData = await authRes.json();
+      const userId = authData.user_id;
+
+      // 식단 저장 API 호출 (식사별로 개별 저장)
+      const meals = [];
+      
+      if (selectedDietPlan.meals.breakfast) {
+        meals.push({ type: '아침', name: selectedDietPlan.meals.breakfast });
+      }
+      if (selectedDietPlan.meals.lunch) {
+        meals.push({ type: '점심', name: selectedDietPlan.meals.lunch });
+      }
+      if (selectedDietPlan.meals.dinner) {
+        meals.push({ type: '저녁', name: selectedDietPlan.meals.dinner });
+      }
+      if (selectedDietPlan.meals.snack) {
+        meals.push({ type: '간식', name: selectedDietPlan.meals.snack });
+      }
+
+      const savePromises = meals.map(async (meal) => {
+        try {
+          const response = await fetch(`${apiEndpoint}/api/v1/food/save-food`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              userId: userId,
+              foodName: `${selectedDietPlan.name} - ${meal.type}`,
+              ingredients: meal.name.split('+').map(s => s.trim()), // 간단한 재료 추출
+              portionSizeG: 100,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const result = await response.json();
+          return { success: true, meal: meal.type, data: result };
+        } catch (error) {
+          console.error(`❌ ${meal.type} 저장 실패:`, error);
+          return { success: false, meal: meal.type, error };
+        }
+      });
+
+      const results = await Promise.all(savePromises);
+      
+      // 결과 확인
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+      
+      if (failCount === 0) {
+        setModalMessage(`🎉 "${selectedDietPlan.name}" 식단이 성공적으로 저장되었습니다!\n\n저장된 식사: ${successCount}개`);
+        setShowModal(true);
+        
+        // 3초 후 대시보드로 이동
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 3000);
+      } else {
+        setModalMessage(`⚠️ 일부 식사 저장에 실패했습니다.\n성공: ${successCount}개, 실패: ${failCount}개`);
+        setShowModal(true);
+      }
+    } catch (error) {
+      console.error('❌ 식단 저장 중 오류:', error);
+      setModalMessage('❌ 식단 저장 중 오류가 발생했습니다.');
+      setShowModal(true);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // 식단 흐름 초기화
@@ -705,7 +821,7 @@ export default function RecommendPage() {
                                 key={planIdx}
                                 onClick={() => {
                                   setSelectedDietPlan(plan);
-                                  setDietFlowStep("cooking");
+                                  setDietFlowStep("complete");
                                 }}
                                 className="w-full text-left bg-white border-2 border-slate-200 rounded-xl p-3 hover:border-green-400 hover:shadow-md transition-all active:scale-[0.98]"
                               >
@@ -716,9 +832,33 @@ export default function RecommendPage() {
                                   </div>
                                 </div>
                                 <div className="text-xs text-slate-600 mb-2 leading-relaxed">{plan.description}</div>
+                                
+                                {/* 식사 미리보기 */}
+                                {plan.meals && (
+                                  <div className="space-y-1 mb-2">
+                                    {plan.meals.breakfast && (
+                                      <div className="text-xs text-slate-500">
+                                        <span className="font-semibold">🌅 아침:</span> {plan.meals.breakfast.slice(0, 30)}...
+                                      </div>
+                                    )}
+                                    {plan.meals.lunch && (
+                                      <div className="text-xs text-slate-500">
+                                        <span className="font-semibold">☀️ 점심:</span> {plan.meals.lunch.slice(0, 30)}...
+                                      </div>
+                                    )}
+                                    {plan.meals.dinner && (
+                                      <div className="text-xs text-slate-500">
+                                        <span className="font-semibold">🌙 저녁:</span> {plan.meals.dinner.slice(0, 30)}...
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                
                                 <div className="text-xs text-slate-500 border-t border-slate-100 pt-2 mt-2">
                                   {plan.nutrients}
                                 </div>
+                                
+                                <div className="mt-2 text-green-600 font-medium text-xs">자세히 보기 →</div>
                               </button>
                             ))}
                           </div>
@@ -914,9 +1054,20 @@ export default function RecommendPage() {
                 <div className="space-y-3 px-4 mt-6">
                   <button
                     onClick={saveDietPlan}
-                    className="w-full py-3 bg-green-500 text-white rounded-lg font-bold text-base active:bg-green-600 transition shadow-md"
+                    disabled={isSaving}
+                    className={`w-full py-3 rounded-lg font-bold text-base transition shadow-md ${
+                      isSaving
+                        ? 'bg-slate-400 text-white cursor-not-allowed'
+                        : 'bg-green-500 text-white active:bg-green-600'
+                    }`}
                   >
-                    식단 저장하기
+                    {isSaving ? '저장 중...' : '식단 저장하기'}
+                  </button>
+                  <button
+                    onClick={() => setDietFlowStep("chat")}
+                    className="w-full py-3 bg-blue-500 text-white rounded-lg font-bold text-base active:bg-blue-600 transition shadow-md"
+                  >
+                    ← 다른 식단 보기
                   </button>
                   <button
                     onClick={() => router.push("/")}
@@ -932,6 +1083,23 @@ export default function RecommendPage() {
       </main>
 
       {isLoggedIn && <MobileNav />}
+      
+      {/* 모달 */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="text-center">
+              <p className="text-slate-800 whitespace-pre-line mb-6">{modalMessage}</p>
+              <button
+                onClick={() => setShowModal(false)}
+                className="w-full py-3 bg-green-500 text-white rounded-lg font-bold active:bg-green-600 transition"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
