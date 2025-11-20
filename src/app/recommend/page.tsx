@@ -174,8 +174,22 @@ export default function RecommendPage() {
   ]);
   const [dietChatInput, setDietChatInput] = useState("");
   const [dietLoading, setDietLoading] = useState(false);
+  const [dietLoadingStatus, setDietLoadingStatus] = useState({ text: "", seconds: 0 }); // 식단 추천 로딩 상태 추가
   const [recommendedDietPlans, setRecommendedDietPlans] = useState<DietPlan[]>([]);
   const [selectedDietPlan, setSelectedDietPlan] = useState<DietPlan | null>(null);
+  
+  // 선택된 끼니 상태 (체크박스)
+  const [selectedMeals, setSelectedMeals] = useState<{
+    breakfast: boolean;
+    lunch: boolean;
+    dinner: boolean;
+    snack: boolean;
+  }>({
+    breakfast: true,
+    lunch: true,
+    dinner: true,
+    snack: true,
+  });
   
   // 식단 추천 메타데이터 (저장용)
   const [dietMetadata, setDietMetadata] = useState<{
@@ -690,26 +704,43 @@ export default function RecommendPage() {
 
     setDietMessages((prev) => [...prev, { role: "user", text: userText }]);
     setDietLoading(true);
+    
+    // 실제 진행 과정에 맞춰 상태 표시
+    let seconds = 0;
+    const startTime = Date.now();
+    
+    const updateLoadingTime = () => {
+      seconds = Math.floor((Date.now() - startTime) / 1000);
+      setDietLoadingStatus((prev) => ({ ...prev, seconds }));
+    };
+    
+    const timeInterval = setInterval(updateLoadingTime, 1000);
 
     try {
       const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       
-      // 사용자 ID 가져오기
+      // 1단계: 사용자 인증 확인
+      setDietLoadingStatus({ text: "사용자 인증 확인 중", seconds: 0 });
       const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
         credentials: 'include',
       });
       
       if (!authRes.ok) {
+        clearInterval(timeInterval);
         setDietMessages((prev) => [
           ...prev,
           { role: "bot", text: "⚠️ 로그인이 필요합니다. 로그인 페이지로 이동해주세요." },
         ]);
         setDietLoading(false);
+        setDietLoadingStatus({ text: "", seconds: 0 });
         return;
       }
       
       const authData = await authRes.json();
       const userId = authData.user_id;
+      
+      // 2단계: 건강 정보 및 식단 분석 중
+      setDietLoadingStatus({ text: "건강 정보 확인 및 식단 분석 중", seconds });
       
       // 실제 백엔드 API 호출
       const res = await fetch(`${apiEndpoint}/api/v1/recommend/diet-plan?user_id=${userId}`, {
@@ -722,6 +753,8 @@ export default function RecommendPage() {
         }),
       });
 
+      // 3단계: 식단 추천 완료
+      setDietLoadingStatus({ text: "식단 추천 완료", seconds });
       const result = await res.json();
 
       if (result.success && result.data) {
@@ -785,13 +818,22 @@ export default function RecommendPage() {
         { role: "bot", text: "❌ 서버와 통신 중 문제가 발생했습니다. 나중에 다시 시도해주세요." },
       ]);
     } finally {
+      clearInterval(timeInterval);
       setDietLoading(false);
+      setDietLoadingStatus({ text: "", seconds: 0 });
     }
   };
 
   // 식단 선택
   const selectDietPlan = (plan: DietPlan) => {
     setSelectedDietPlan(plan);
+    // 선택 가능한 끼니만 체크 (존재하는 끼니만 true로 설정)
+    setSelectedMeals({
+      breakfast: !!plan.meals.breakfast,
+      lunch: !!plan.meals.lunch,
+      dinner: !!plan.meals.dinner,
+      snack: !!plan.meals.snack,
+    });
     setDietFlowStep("complete");
   };
 
@@ -886,11 +928,11 @@ export default function RecommendPage() {
         console.log('✅ meal_details 사용 - 실제 끼니별 칼로리 사용', selectedDietPlan.meal_details);
       }
 
-      // 식단 저장 요청 데이터 구성
+      // 식단 저장 요청 데이터 구성 (선택된 끼니만)
       const meals = [];
       
-      // 아침
-      if (selectedDietPlan.meals.breakfast) {
+      // 아침 (선택된 경우에만)
+      if (selectedDietPlan.meals.breakfast && selectedMeals.breakfast) {
         const details = useMealDetails ? selectedDietPlan.meal_details?.breakfast : null;
         meals.push({
           food_name: `${selectedDietPlan.name} - 아침`,
@@ -904,8 +946,8 @@ export default function RecommendPage() {
         });
       }
       
-      // 점심
-      if (selectedDietPlan.meals.lunch) {
+      // 점심 (선택된 경우에만)
+      if (selectedDietPlan.meals.lunch && selectedMeals.lunch) {
         const details = useMealDetails ? selectedDietPlan.meal_details?.lunch : null;
         meals.push({
           food_name: `${selectedDietPlan.name} - 점심`,
@@ -919,8 +961,8 @@ export default function RecommendPage() {
         });
       }
       
-      // 저녁
-      if (selectedDietPlan.meals.dinner) {
+      // 저녁 (선택된 경우에만)
+      if (selectedDietPlan.meals.dinner && selectedMeals.dinner) {
         const details = useMealDetails ? selectedDietPlan.meal_details?.dinner : null;
         meals.push({
           food_name: `${selectedDietPlan.name} - 저녁`,
@@ -934,8 +976,8 @@ export default function RecommendPage() {
         });
       }
       
-      // 간식
-      if (selectedDietPlan.meals.snack) {
+      // 간식 (선택된 경우에만)
+      if (selectedDietPlan.meals.snack && selectedMeals.snack) {
         const details = useMealDetails ? selectedDietPlan.meal_details?.snack : null;
         meals.push({
           food_name: `${selectedDietPlan.name} - 간식`,
@@ -947,6 +989,14 @@ export default function RecommendPage() {
           fat: details?.fat || fallbackFatPerMeal,
           consumed_at: new Date().toISOString()
         });
+      }
+      
+      // 선택된 끼니가 없으면 경고
+      if (meals.length === 0) {
+        setModalMessage('⚠️ 저장할 끼니를 최소 1개 이상 선택해주세요.');
+        setShowModal(true);
+        setIsSaving(false);
+        return;
       }
 
       // 추천 식단 전용 저장 API 호출
@@ -1457,17 +1507,32 @@ export default function RecommendPage() {
                                   <div className="space-y-1 mb-2">
                                     {plan.meals.breakfast && (
                                       <div className="text-xs text-slate-500">
-                                        <span className="font-semibold">🌅 아침:</span> {plan.meals.breakfast.slice(0, 30)}...
+                                        <span className="font-semibold">🌅 아침:</span> {plan.meals.breakfast.slice(0, 25)}...
+                                        {plan.meal_details?.breakfast?.calories && (
+                                          <span className="text-green-600 font-semibold ml-1">
+                                            ({plan.meal_details.breakfast.calories}kcal)
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                     {plan.meals.lunch && (
                                       <div className="text-xs text-slate-500">
-                                        <span className="font-semibold">☀️ 점심:</span> {plan.meals.lunch.slice(0, 30)}...
+                                        <span className="font-semibold">☀️ 점심:</span> {plan.meals.lunch.slice(0, 25)}...
+                                        {plan.meal_details?.lunch?.calories && (
+                                          <span className="text-green-600 font-semibold ml-1">
+                                            ({plan.meal_details.lunch.calories}kcal)
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                     {plan.meals.dinner && (
                                       <div className="text-xs text-slate-500">
-                                        <span className="font-semibold">🌙 저녁:</span> {plan.meals.dinner.slice(0, 30)}...
+                                        <span className="font-semibold">🌙 저녁:</span> {plan.meals.dinner.slice(0, 25)}...
+                                        {plan.meal_details?.dinner?.calories && (
+                                          <span className="text-green-600 font-semibold ml-1">
+                                            ({plan.meal_details.dinner.calories}kcal)
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -1486,8 +1551,11 @@ export default function RecommendPage() {
                     ))}
 
                     {dietLoading && (
-                      <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-500 border border-slate-200">
-                        식단 추천 중이에요...
+                      <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
+                        <span>
+                          {dietLoadingStatus.text}... {dietLoadingStatus.seconds > 0 && `(${dietLoadingStatus.seconds}초)`}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1617,46 +1685,135 @@ export default function RecommendPage() {
 
                 {/* 식단 상세 보기 */}
                 <div className="bg-white rounded-xl border-2 border-slate-200 shadow-md p-4">
-                  <h2 className="text-lg font-bold text-slate-900 mb-4 text-center">하루 식단 구성</h2>
+                  <h2 className="text-lg font-bold text-slate-900 mb-2 text-center">하루 식단 구성</h2>
+                  <p className="text-xs text-slate-500 text-center mb-4">저장할 끼니를 선택하세요</p>
                   
                   <div className="space-y-3">
                     {selectedDietPlan.meals.breakfast && (
-                      <div className="bg-orange-50 rounded-xl p-3 border border-orange-200">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-lg">🌅</span>
-                          <h3 className="text-sm font-bold text-orange-700">아침</h3>
+                      <div className={`bg-orange-50 rounded-xl p-3 border-2 transition ${
+                        selectedMeals.breakfast ? 'border-orange-400' : 'border-orange-200 opacity-60'
+                      }`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedMeals.breakfast}
+                              onChange={(e) => setSelectedMeals(prev => ({ ...prev, breakfast: e.target.checked }))}
+                              className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                            />
+                            <span className="text-lg">🌅</span>
+                            <h3 className="text-sm font-bold text-orange-700">아침</h3>
+                          </div>
+                          {selectedDietPlan.meal_details?.breakfast?.calories && (
+                            <span className="text-xs font-bold text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
+                              {selectedDietPlan.meal_details.breakfast.calories}kcal
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-700 leading-relaxed">{selectedDietPlan.meals.breakfast}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed ml-6">{selectedDietPlan.meals.breakfast}</p>
+                        {selectedDietPlan.meal_details?.breakfast && (
+                          <div className="text-xs text-slate-500 mt-2 ml-6">
+                            단백질 {selectedDietPlan.meal_details.breakfast.protein}g / 
+                            탄수화물 {selectedDietPlan.meal_details.breakfast.carb}g / 
+                            지방 {selectedDietPlan.meal_details.breakfast.fat}g
+                          </div>
+                        )}
                       </div>
                     )}
 
                     {selectedDietPlan.meals.lunch && (
-                      <div className="bg-yellow-50 rounded-xl p-3 border border-yellow-200">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-lg">☀️</span>
-                          <h3 className="text-sm font-bold text-yellow-700">점심</h3>
+                      <div className={`bg-yellow-50 rounded-xl p-3 border-2 transition ${
+                        selectedMeals.lunch ? 'border-yellow-400' : 'border-yellow-200 opacity-60'
+                      }`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedMeals.lunch}
+                              onChange={(e) => setSelectedMeals(prev => ({ ...prev, lunch: e.target.checked }))}
+                              className="w-4 h-4 text-yellow-600 rounded focus:ring-yellow-500"
+                            />
+                            <span className="text-lg">☀️</span>
+                            <h3 className="text-sm font-bold text-yellow-700">점심</h3>
+                          </div>
+                          {selectedDietPlan.meal_details?.lunch?.calories && (
+                            <span className="text-xs font-bold text-yellow-600 bg-yellow-100 px-2 py-1 rounded-full">
+                              {selectedDietPlan.meal_details.lunch.calories}kcal
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-700 leading-relaxed">{selectedDietPlan.meals.lunch}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed ml-6">{selectedDietPlan.meals.lunch}</p>
+                        {selectedDietPlan.meal_details?.lunch && (
+                          <div className="text-xs text-slate-500 mt-2 ml-6">
+                            단백질 {selectedDietPlan.meal_details.lunch.protein}g / 
+                            탄수화물 {selectedDietPlan.meal_details.lunch.carb}g / 
+                            지방 {selectedDietPlan.meal_details.lunch.fat}g
+                          </div>
+                        )}
                       </div>
                     )}
 
                     {selectedDietPlan.meals.dinner && (
-                      <div className="bg-indigo-50 rounded-xl p-3 border border-indigo-200">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-lg">🌙</span>
-                          <h3 className="text-sm font-bold text-indigo-700">저녁</h3>
+                      <div className={`bg-indigo-50 rounded-xl p-3 border-2 transition ${
+                        selectedMeals.dinner ? 'border-indigo-400' : 'border-indigo-200 opacity-60'
+                      }`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedMeals.dinner}
+                              onChange={(e) => setSelectedMeals(prev => ({ ...prev, dinner: e.target.checked }))}
+                              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                            />
+                            <span className="text-lg">🌙</span>
+                            <h3 className="text-sm font-bold text-indigo-700">저녁</h3>
+                          </div>
+                          {selectedDietPlan.meal_details?.dinner?.calories && (
+                            <span className="text-xs font-bold text-indigo-600 bg-indigo-100 px-2 py-1 rounded-full">
+                              {selectedDietPlan.meal_details.dinner.calories}kcal
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-700 leading-relaxed">{selectedDietPlan.meals.dinner}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed ml-6">{selectedDietPlan.meals.dinner}</p>
+                        {selectedDietPlan.meal_details?.dinner && (
+                          <div className="text-xs text-slate-500 mt-2 ml-6">
+                            단백질 {selectedDietPlan.meal_details.dinner.protein}g / 
+                            탄수화물 {selectedDietPlan.meal_details.dinner.carb}g / 
+                            지방 {selectedDietPlan.meal_details.dinner.fat}g
+                          </div>
+                        )}
                       </div>
                     )}
 
                     {selectedDietPlan.meals.snack && (
-                      <div className="bg-pink-50 rounded-xl p-3 border border-pink-200">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-lg">🍎</span>
-                          <h3 className="text-sm font-bold text-pink-700">간식</h3>
+                      <div className={`bg-pink-50 rounded-xl p-3 border-2 transition ${
+                        selectedMeals.snack ? 'border-pink-400' : 'border-pink-200 opacity-60'
+                      }`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedMeals.snack}
+                              onChange={(e) => setSelectedMeals(prev => ({ ...prev, snack: e.target.checked }))}
+                              className="w-4 h-4 text-pink-600 rounded focus:ring-pink-500"
+                            />
+                            <span className="text-lg">🍎</span>
+                            <h3 className="text-sm font-bold text-pink-700">간식</h3>
+                          </div>
+                          {selectedDietPlan.meal_details?.snack?.calories && (
+                            <span className="text-xs font-bold text-pink-600 bg-pink-100 px-2 py-1 rounded-full">
+                              {selectedDietPlan.meal_details.snack.calories}kcal
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-700 leading-relaxed">{selectedDietPlan.meals.snack}</p>
+                        <p className="text-xs text-slate-700 leading-relaxed ml-6">{selectedDietPlan.meals.snack}</p>
+                        {selectedDietPlan.meal_details?.snack && (
+                          <div className="text-xs text-slate-500 mt-2 ml-6">
+                            단백질 {selectedDietPlan.meal_details.snack.protein}g / 
+                            탄수화물 {selectedDietPlan.meal_details.snack.carb}g / 
+                            지방 {selectedDietPlan.meal_details.snack.fat}g
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1680,7 +1837,10 @@ export default function RecommendPage() {
                         : 'bg-green-500 text-white active:bg-green-600'
                     }`}
                   >
-                    {isSaving ? '저장 중...' : '식단 저장하기'}
+                    {isSaving ? '저장 중...' : `선택한 끼니 저장하기 (${
+                      [selectedMeals.breakfast, selectedMeals.lunch, selectedMeals.dinner, selectedMeals.snack]
+                        .filter(Boolean).length
+                    }개)`}
                   </button>
                   <button
                     onClick={() => setDietFlowStep("chat")}
