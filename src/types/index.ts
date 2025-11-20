@@ -143,6 +143,8 @@ export interface MealRecommendation {
   calories: number;
   description: string;
   isSelected: boolean;
+  mealType?: MealType; // 식사 유형
+  recommendedMealType?: MealType; // 추천 식사 유형
   nutrients?: {
     protein: number;
     carbs: number;
@@ -158,6 +160,9 @@ export interface FoodCandidate {
   description?: string;
   ingredients?: string[]; // 각 후보의 재료
 }
+
+// 식사 유형 타입
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 // 음식 이미지 분석 결과 타입
 export interface FoodAnalysisResult {
@@ -177,4 +182,5 @@ export interface FoodAnalysisResult {
   confidence: number;
   suggestions: string[];
   candidates?: FoodCandidate[]; // 여러 후보 음식 리스트
+  mealType?: MealType; // 식사 유형 (선택사항)
 }

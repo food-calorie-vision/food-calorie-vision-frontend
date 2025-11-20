@@ -137,11 +137,27 @@ export default function RecommendPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState({ text: "", seconds: 0 });
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  
+  // 재치있는 로딩 메시지 배열
+  const funnyRecipeLoadingMessages = [
+    '📚 레시피 북 뒤지는 중...',
+    '👨‍🍳 고든 램지에게 물어보는 중...',
+    '😅 욕 먹는 중... (농담입니다)',
+    '🤖 GPT가 요리책 읽는 중...',
+    '🔥 맛있는 레시피 찾는 중...',
+    '📊 영양소 계산 중...',
+    '✨ 거의 다 왔어요!'
+  ];
 
   // 레시피 선택 상태
   const [recommendedRecipes, setRecommendedRecipes] = useState<Recipe[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [healthWarning, setHealthWarning] = useState<string>("");
+  
+  // 식사 유형 선택 상태 (새로 추가)
+  const [pendingUserRequest, setPendingUserRequest] = useState<string>("");  // 사용자 요청 임시 저장
+  const [showMealTypeSelection, setShowMealTypeSelection] = useState(false);  // 식사 유형 선택 UI 표시 여부
+  const [selectedMealType, setSelectedMealType] = useState<string | null>(null);  // 선택된 식사 유형
 
   // 조리 상태
   const [recipeDetail, setRecipeDetail] = useState<RecipeDetail | null>(null);
@@ -245,38 +261,51 @@ export default function RecommendPage() {
     }
   };
 
-  // 채팅 보내기 - 백엔드 API 연동
-  const sendChat = async () => {
-    if (!chatInput.trim() || isLoading) return;
-
-    const userText = chatInput.trim();
-    setChatInput("");
-
-    setMessages((prev) => [...prev, { role: "user", text: userText }]);
+  // 식사 유형 선택 처리
+  const handleMealTypeSelect = async (mealType: string) => {
+    const mealTypeKr = {
+      'breakfast': '아침',
+      'lunch': '점심',
+      'dinner': '저녁',
+      'snack': '간식'
+    }[mealType] || mealType;
+    
+    // 사용자 선택 메시지 추가
+    setMessages((prev) => [...prev, { role: "user", text: mealTypeKr }]);
+    setShowMealTypeSelection(false);
+    setSelectedMealType(mealType);
+    
+    // 실제 레시피 추천 API 호출
+    await fetchRecipeRecommendations(pendingUserRequest, mealType);
+  };
+  
+  // 레시피 추천 API 호출 (분리)
+  const fetchRecipeRecommendations = async (userText: string, mealType: string) => {
     setIsLoading(true);
     
-    // 실제 진행 과정에 맞춰 상태 표시
-    let seconds = 0;
-    const startTime = Date.now();
+    // 재치있는 로딩 메시지 순환
+    let messageIndex = 0;
+    const messageInterval = setInterval(() => {
+      setLoadingStatus({ 
+        text: funnyRecipeLoadingMessages[messageIndex], 
+        seconds: 0 
+      });
+      messageIndex = (messageIndex + 1) % funnyRecipeLoadingMessages.length;
+    }, 2000); // 2초마다 메시지 변경
     
-    const updateLoadingTime = () => {
-      seconds = Math.floor((Date.now() - startTime) / 1000);
-      setLoadingStatus((prev) => ({ ...prev, seconds }));
-    };
-    
-    const timeInterval = setInterval(updateLoadingTime, 1000);
+    // 시작 메시지
+    setLoadingStatus({ text: funnyRecipeLoadingMessages[0], seconds: 0 });
 
     try {
       const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       
       // 1단계: 사용자 인증 확인
-      setLoadingStatus({ text: "사용자 인증 확인 중", seconds: 0 });
       const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
         credentials: 'include',
       });
       
       if (!authRes.ok) {
-        clearInterval(timeInterval);
+        clearInterval(messageInterval);
         setMessages((prev) => [
           ...prev,
           { role: "bot", text: "⚠️ 로그인이 필요합니다. 로그인 페이지로 이동해주세요." },
@@ -288,9 +317,6 @@ export default function RecommendPage() {
       
       const authData = await authRes.json();
       const userId = authData.user_id;
-      
-      // 2단계: 건강 정보 및 레시피 분석 중
-      setLoadingStatus({ text: "건강 정보 확인 및 레시피 분석 중", seconds });
       
       // 최근 메시지에서 alert 메시지가 있는지 확인
       const recentMessages = messages.slice(-5).map(msg => ({
@@ -313,12 +339,11 @@ export default function RecommendPage() {
         credentials: 'include',
         body: JSON.stringify({ 
           user_request: userText,
-          conversation_history: recentMessages  // 최근 메시지 히스토리 전달
+          conversation_history: recentMessages,  // 최근 메시지 히스토리 전달
+          meal_type: mealType  // ✨ 식사 유형 전달
         }),
       });
 
-      // 3단계: 레시피 추천 완료
-      setLoadingStatus({ text: "레시피 추천 완료", seconds });
       const result = await res.json();
 
       if (result.success && result.data) {
@@ -342,15 +367,22 @@ export default function RecommendPage() {
         setHealthWarning(responseData.health_warning || "");
         setRecommendedRecipes(recipes);
         
-        // 사용자 친화적 메시지 사용 (백엔드에서 생성된 메시지)
+        // 1️⃣ 칼로리/나트륨 초과 경고가 있으면 첫 번째 메시지로 전송
+        if (responseData.health_warning) {
+          setMessages((prev) => [...prev, { 
+            role: "bot", 
+            text: responseData.health_warning,
+            healthWarning: responseData.health_warning
+          }]);
+        }
+        
+        // 2️⃣ 레시피 추천은 두 번째 메시지로 전송
         const botMessage = responseData.user_friendly_message || `✅ "${userText}" 관련 레시피를 추천해드릴게요!\n\n아래에서 원하시는 레시피를 선택해주세요! 🍳`;
         
-        // 메시지에 레시피 카드 포함
         setMessages((prev) => [...prev, { 
           role: "bot", 
           text: botMessage,
-          recipeCards: recipes,
-          healthWarning: responseData.health_warning
+          recipeCards: recipes
         }]);
         
         // flowStep은 'chat' 상태 유지 (채팅창 내에서 선택 가능)
@@ -367,10 +399,35 @@ export default function RecommendPage() {
         { role: "bot", text: "❌ 서버와 통신 중 문제가 발생했습니다. 나중에 다시 시도해주세요." },
       ]);
     } finally {
-      clearInterval(timeInterval);
+      clearInterval(messageInterval);
       setIsLoading(false);
       setLoadingStatus({ text: "", seconds: 0 });
     }
+  };
+  
+  // 채팅 보내기 - 식사 유형 선택 단계 추가
+  const sendChat = async () => {
+    if (!chatInput.trim() || isLoading) return;
+
+    const userText = chatInput.trim();
+    setChatInput("");
+
+    // 사용자 메시지 추가
+    setMessages((prev) => [...prev, { role: "user", text: userText }]);
+    
+    // 사용자 요청 저장 후 식사 유형 선택 UI 표시
+    setPendingUserRequest(userText);
+    
+    // 봇 메시지: 식사 유형 선택 요청
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "bot",
+        text: "어떤 식사를 준비하시나요? 아래에서 선택해주세요 😊"
+      }
+    ]);
+    
+    setShowMealTypeSelection(true);
   };
 
   // 레시피 선택 - 채팅창 내에서 처리
@@ -378,28 +435,38 @@ export default function RecommendPage() {
     setSelectedRecipe(recipe);
     setLoadingRecipeDetail(true);
     
-    // 실제 진행 과정에 맞춰 상태 표시
-    let seconds = 0;
-    const startTime = Date.now();
+    // 재치있는 로딩 메시지 순환
+    const funnyDetailLoadingMessages = [
+      '📖 레시피 책 펼치는 중...',
+      '👨‍🍳 셰프님께 물어보는 중...',
+      '🔍 비밀 레시피 찾는 중...',
+      '📝 조리법 정리하는 중...',
+      '🧂 양념 비율 계산 중...',
+      '✨ 맛있게 만드는 팁 준비 중...',
+      '🎯 완벽한 레시피 거의 완성!'
+    ];
     
-    const updateLoadingTime = () => {
-      seconds = Math.floor((Date.now() - startTime) / 1000);
-      setLoadingStatus((prev) => ({ ...prev, seconds }));
-    };
+    let messageIndex = 0;
+    setLoadingStatus({ text: funnyDetailLoadingMessages[0], seconds: 0 });
     
-    const timeInterval = setInterval(updateLoadingTime, 1000);
+    const messageInterval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % funnyDetailLoadingMessages.length;
+      setLoadingStatus({ 
+        text: funnyDetailLoadingMessages[messageIndex], 
+        seconds: 0 
+      });
+    }, 2000);
     
     try {
       const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       
-      // 1단계: 사용자 인증 확인
-      setLoadingStatus({ text: "사용자 인증 확인 중", seconds: 0 });
+      // 사용자 인증 확인
       const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
         credentials: 'include',
       });
       
       if (!authRes.ok) {
-        clearInterval(timeInterval);
+        clearInterval(messageInterval);
         setMessages((prev) => [...prev, { 
           role: "bot", 
           text: "⚠️ 로그인이 필요합니다." 
@@ -412,17 +479,13 @@ export default function RecommendPage() {
       const authData = await authRes.json();
       const userId = authData.user_id;
       
-      // 2단계: 레시피 상세 정보 불러오는 중
-      setLoadingStatus({ text: "레시피 상세 정보 불러오는 중", seconds });
+      // 레시피 상세 정보 조회
       const res = await fetch(`${apiEndpoint}/api/v1/recipes/detail?user_id=${userId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: 'include',
         body: JSON.stringify({ recipe_name: recipe.name }),
       });
-
-      // 3단계: 조리법 준비 완료
-      setLoadingStatus({ text: "조리법 준비 완료", seconds });
       const result = await res.json();
 
       if (result.success && result.data) {
@@ -462,7 +525,7 @@ export default function RecommendPage() {
         text: "❌ 레시피 상세 정보를 불러오는 중 오류가 발생했습니다." 
       }]);
     } finally {
-      clearInterval(timeInterval);
+      clearInterval(messageInterval);
       setLoadingRecipeDetail(false);
       setLoadingStatus({ text: "", seconds: 0 });
     }
@@ -556,6 +619,8 @@ export default function RecommendPage() {
       const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       
       // 레시피 저장 API 호출 (새로운 API 사용)
+      console.log(`📤 레시피 저장 요청: meal_type=${selectedMealType}`);
+      
       const response = await fetch(`${apiEndpoint}/api/v1/recipes/save`, {
         method: 'POST',
         headers: {
@@ -565,7 +630,7 @@ export default function RecommendPage() {
         body: JSON.stringify({
           recipe_name: selectedRecipe.name,
           actual_servings: 1.0,  // TODO: 사용자가 입력하도록 개선
-          meal_type: 'lunch',  // TODO: 사용자가 선택하도록 개선
+          meal_type: selectedMealType || 'lunch',  // ✨ 사용자가 선택한 식사 유형 사용
           nutrition_info: {
             calories: recipeDetail.nutrition_info.calories,
             protein: recipeDetail.nutrition_info.protein,
@@ -1008,19 +1073,60 @@ export default function RecommendPage() {
                             {m.text}
                           </div>
                         ) : (
-                          /* 봇 메시지는 레시피 카드를 포함한 전체를 하나의 버블로 */
-                          <div className="max-w-[95%] rounded-lg px-3 py-3 text-sm leading-relaxed bg-slate-100 text-slate-800 border border-slate-200">
-                            {/* 메시지 텍스트 */}
-                            <div className="whitespace-pre-line mb-2">
-                              {m.text}
-                            </div>
+                          /* 봇 메시지 */
+                          <div>
+                            {/* 건강 경고가 있으면 별도의 경고 메시지 버블로 표시 */}
+                            {m.healthWarning ? (
+                              <div className="max-w-[95%] rounded-lg px-4 py-3 text-sm leading-relaxed bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-300 shadow-sm">
+                                <div className="flex items-start gap-2">
+                                  <div className="text-xl">⚠️</div>
+                                  <div className="flex-1">
+                                    <div className="font-bold text-red-800 mb-1">건강 알림</div>
+                                    <div className="text-red-700 whitespace-pre-line">
+                                      {m.text}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              /* 일반 메시지 또는 레시피 추천 메시지 */
+                              <div className="max-w-[95%] rounded-lg px-3 py-3 text-sm leading-relaxed bg-slate-100 text-slate-800 border border-slate-200">
+                                {/* 메시지 텍스트 */}
+                                <div className="whitespace-pre-line mb-2">
+                                  {m.text}
+                                </div>
                             
-                            {/* 건강 경고 표시 */}
-                            {m.healthWarning && (
-                              <div className="mt-2 mb-2 bg-amber-50 border-2 border-amber-300 rounded-lg p-2">
-                                <p className="text-xs text-amber-900 font-medium whitespace-pre-line leading-relaxed">
-                                  ⚠️ {m.healthWarning}
-                                </p>
+                            {/* 식사 유형 선택 버튼 (showMealTypeSelection이 true일 때만 표시) */}
+                            {idx === messages.length - 1 && showMealTypeSelection && (
+                              <div className="mt-3 grid grid-cols-2 gap-2">
+                                <button
+                                  onClick={() => handleMealTypeSelect('breakfast')}
+                                  className="py-4 px-3 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border-2 border-orange-200 hover:border-orange-400 transition-all active:scale-95"
+                                >
+                                  <div className="text-3xl mb-1">🌅</div>
+                                  <div className="text-sm font-bold text-slate-800">아침</div>
+                                </button>
+                                <button
+                                  onClick={() => handleMealTypeSelect('lunch')}
+                                  className="py-4 px-3 rounded-xl bg-gradient-to-br from-yellow-50 to-yellow-100 hover:from-yellow-100 hover:to-yellow-200 border-2 border-yellow-200 hover:border-yellow-400 transition-all active:scale-95"
+                                >
+                                  <div className="text-3xl mb-1">☀️</div>
+                                  <div className="text-sm font-bold text-slate-800">점심</div>
+                                </button>
+                                <button
+                                  onClick={() => handleMealTypeSelect('dinner')}
+                                  className="py-4 px-3 rounded-xl bg-gradient-to-br from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 border-2 border-indigo-200 hover:border-indigo-400 transition-all active:scale-95"
+                                >
+                                  <div className="text-3xl mb-1">🌙</div>
+                                  <div className="text-sm font-bold text-slate-800">저녁</div>
+                                </button>
+                                <button
+                                  onClick={() => handleMealTypeSelect('snack')}
+                                  className="py-4 px-3 rounded-xl bg-gradient-to-br from-pink-50 to-pink-100 hover:from-pink-100 hover:to-pink-200 border-2 border-pink-200 hover:border-pink-400 transition-all active:scale-95"
+                                >
+                                  <div className="text-3xl mb-1">🍪</div>
+                                  <div className="text-sm font-bold text-slate-800">간식</div>
+                                </button>
                               </div>
                             )}
                             
@@ -1054,6 +1160,8 @@ export default function RecommendPage() {
                                     </div>
                                   </button>
                                 ))}
+                              </div>
+                            )}
                               </div>
                             )}
                           </div>
