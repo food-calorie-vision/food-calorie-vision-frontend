@@ -39,18 +39,18 @@ export default function FoodImageAnalysisPage() {
             setIsCheckingAuth(false);
           } else {
             alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/login');
+            router.push('/');
           }
         } else if (response.status === 401 || response.status === 403) {
           alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/login');
+          router.push('/');
         } else {
           setIsCheckingAuth(false);
         }
       } catch (error) {
         console.error('인증 확인 실패:', error);
-        // 네트워크 에러는 무시
-        setIsCheckingAuth(false);
+        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+        router.push('/');
       }
     };
 

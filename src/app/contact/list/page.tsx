@@ -28,25 +28,38 @@ export default function ContactListPage() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 로그인 상태 확인 (API 기반)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const expire = sessionStorage.getItem('login_expire');
-      const user = sessionStorage.getItem('user_name');
-      const userIdStr = sessionStorage.getItem('user_id');
-      
-      if (expire && Date.now() < Number(expire)) {
-        setIsLoggedIn(true);
-        setUserName(user || '');
-        // user_id 우선순위: sessionStorage > 테스트용 1
-        if (userIdStr) {
-          setUserId(parseInt(userIdStr));
-        } else {
-          // 테스트용: sessionStorage에 없으면 user_id = 1 사용
-          setUserId(1);
+    const checkAuth = async () => {
+      try {
+        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user_id) {
+            setIsLoggedIn(true);
+            setUserName(data.nickname || data.username);
+            setUserId(data.user_id);
+          } else {
+            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+            router.push('/');
+          }
+        } else if (response.status === 401 || response.status === 403) {
+          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+          router.push('/');
         }
+      } catch (error) {
+        console.error('인증 확인 실패:', error);
+        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+        router.push('/');
       }
-    }
-  }, []);
+    };
+
+    checkAuth();
+  }, [router]);
 
   useEffect(() => {
     if (userId) {

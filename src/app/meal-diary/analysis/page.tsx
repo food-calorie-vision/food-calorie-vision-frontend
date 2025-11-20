@@ -60,15 +60,23 @@ export default function MealDiaryPage() {
           const data = await response.json();
           if (data.user_id) {
             setUserId(data.user_id);
+          } else {
+            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+            router.push('/');
           }
+        } else if (response.status === 401 || response.status === 403) {
+          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+          router.push('/');
         }
       } catch (error) {
         console.error('사용자 정보 가져오기 실패:', error);
+        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+        router.push('/');
       }
     };
     
     fetchUserInfo();
-  }, [apiEndpoint]);
+  }, [apiEndpoint, router]);
 
   const handleDeleteImage = (imageId: string) => {
     setImages((prev) => prev.filter((img) => img.id !== imageId));

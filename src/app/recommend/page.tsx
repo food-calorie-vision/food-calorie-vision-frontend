@@ -130,11 +130,11 @@ export default function RecommendPage() {
             setIsCheckingAuth(false);
           } else {
             alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/login');
+            router.push('/');
           }
         } else if (response.status === 401 || response.status === 403) {
           alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/login');
+          router.push('/');
         } else {
           setIsCheckingAuth(false);
         }

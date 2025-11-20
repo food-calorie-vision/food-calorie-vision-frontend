@@ -30,21 +30,41 @@ export default function InquiryDetailPage() {
   const [inquiry, setInquiry] = useState<Inquiry | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 로그인 상태 확인 (API 기반)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const expire = sessionStorage.getItem('login_expire');
-      const user = sessionStorage.getItem('user_name');
-      
-      if (expire && Date.now() < Number(expire)) {
-        setIsLoggedIn(true);
-        setUserName(user || '');
+    const checkAuth = async () => {
+      try {
+        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user_id) {
+            setIsLoggedIn(true);
+            setUserName(data.nickname || data.username);
+          } else {
+            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+            router.push('/');
+          }
+        } else if (response.status === 401 || response.status === 403) {
+          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+          router.push('/');
+        }
+      } catch (error) {
+        console.error('인증 확인 실패:', error);
+        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+        router.push('/');
       }
-    }
+    };
+
+    checkAuth();
     
     if (id) {
       fetchInquiry();
     }
-  }, [id]);
+  }, [id, router]);
 
   const fetchInquiry = async () => {
     try {
@@ -76,23 +96,6 @@ export default function InquiryDetailPage() {
     }
   };
 
-  // 세션 만료 체크
-  useEffect(() => {
-    const sessionCheckInterval = setInterval(() => {
-      const expire = sessionStorage.getItem('login_expire');
-      if (expire && Date.now() >= Number(expire)) {
-        setIsLoggedIn(false);
-        setUserName('');
-        sessionStorage.removeItem('login_expire');
-        sessionStorage.removeItem('user_name');
-        sessionStorage.removeItem('user_id');
-        alert('오래 활동하지 않아 자동 로그아웃되었습니다.\n다시 로그인해주세요.');
-        router.push('/');
-      }
-    }, 10000);
-
-    return () => clearInterval(sessionCheckInterval);
-  }, [router]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

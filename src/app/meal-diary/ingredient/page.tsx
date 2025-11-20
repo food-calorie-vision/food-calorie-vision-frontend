@@ -87,7 +87,7 @@ export default function IngredientPage() {
         
         if (response.status === 401 || response.status === 403) {
           alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/login');
+          router.push('/');
           return;
         }
         
@@ -95,8 +95,8 @@ export default function IngredientPage() {
         setIsCheckingAuth(false);
       } catch (error) {
         console.error('인증 확인 실패:', error);
-        // 네트워크 에러는 무시 (백엔드 재시작 등)
-        setIsCheckingAuth(false);
+        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+        router.push('/');
       }
     };
     

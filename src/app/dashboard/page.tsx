@@ -37,16 +37,17 @@ export default function Dashboard() {
           } else {
             // 로그인되지 않음
             alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/login');
+            router.push('/');
           }
         } else if (response.status === 401 || response.status === 403) {
           // 인증 실패
           alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/login');
+          router.push('/');
         }
       } catch (error) {
         console.error('사용자 정보 가져오기 실패:', error);
-        // 네트워크 에러는 무시
+        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+        router.push('/');
       } finally {
         setLoading(false);
       }
