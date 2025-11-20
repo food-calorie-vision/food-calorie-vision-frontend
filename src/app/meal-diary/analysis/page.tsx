@@ -44,8 +44,22 @@ export default function MealDiaryPage() {
   const [modalMessage, setModalMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
+  const [selectedMealType, setSelectedMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('lunch');
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
 
   const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  
+  // 재치있는 로딩 메시지 배열
+  const funnyLoadingMessages = [
+    '🔍 AI가 음식을 열심히 관찰 중...',
+    '📸 이미지 분석 시작!',
+    '🤖 GPT가 음식 백과사전 뒤지는 중...',
+    '🍜 칼로리 눈물 빠지게 계산 중!',
+    '📊 영양소 정보 수집 중...',
+    '🔬 음식 성분 분석 중...',
+    '🎯 최적의 매칭 찾는 중...',
+    '✨ 거의 다 왔어요!'
+  ];
 
   // 사용자 정보 가져오기
   useEffect(() => {
@@ -104,6 +118,15 @@ export default function MealDiaryPage() {
     console.log('🚀 분석 시작 - 이미지 개수:', images.length);
     setIsAnalyzing(true);
     setCompletedImages(new Set()); // 분석 시작 시 초기화
+    
+    // 재치있는 로딩 메시지 순차 표시
+    let messageIndex = 0;
+    setLoadingMessage(funnyLoadingMessages[0]);
+    
+    const messageInterval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % funnyLoadingMessages.length;
+      setLoadingMessage(funnyLoadingMessages[messageIndex]);
+    }, 2000); // 2초마다 메시지 변경
     
     try {
       // 각 이미지를 백엔드 API로 전송하여 분석
@@ -197,7 +220,12 @@ export default function MealDiaryPage() {
       setImages(analyzedImages);
       console.log('🎉 모든 이미지 분석 완료');
       
+      clearInterval(messageInterval);
+      setLoadingMessage('');
+      
     } catch (error) {
+      clearInterval(messageInterval);
+      setLoadingMessage('');
       console.error('❌ 분석 중 오류:', error);
       
       // 에러 발생 시 시각적 피드백
@@ -247,6 +275,7 @@ export default function MealDiaryPage() {
             body: JSON.stringify({
               userId: userId,
               foodName: selectedPrediction.name,
+              mealType: selectedMealType, // 식사 유형 추가
               ingredients: selectedPrediction.ingredients || [],
               portionSizeG: 100, // 기본값 (나중에 사용자 입력으로 변경 가능)
               // imageRef: null로 설정 (Base64는 너무 커서 DB에 저장 불가)
@@ -297,23 +326,80 @@ export default function MealDiaryPage() {
 
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4">
-      <div className="mb-4">
-        <h2 className="text-xl font-bold text-slate-900 mb-2">식단 분석</h2>
-        <p className="text-sm text-slate-600">
-          음식 이미지를 업로드하면 AI가 자동으로 분석해드립니다.
-        </p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50">
+      <div className="max-w-2xl mx-auto p-4 pb-8">
+        {/* 헤더 */}
+        <div className="mb-6 text-center">
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">
+            🍽️ 식단 분석
+          </h2>
+          <p className="text-sm text-slate-600">
+            음식 이미지를 업로드하면 AI가 자동으로 분석해드립니다
+          </p>
+        </div>
 
-      {/* 이미지 업로드 영역 - 모바일 최적화 */}
-      <div className="mb-4">
+        {/* 식사 유형 선택 */}
+        <div className="mb-6 bg-white rounded-2xl p-4 shadow-sm">
+          <label className="block text-sm font-medium text-slate-700 mb-3">
+            식사 유형 선택
+          </label>
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => setSelectedMealType('breakfast')}
+              className={`py-2 px-2 rounded-lg text-sm font-medium transition-all ${
+                selectedMealType === 'breakfast'
+                  ? 'bg-green-500 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <div className="text-lg">🌅</div>
+              <div>아침</div>
+            </button>
+            <button
+              onClick={() => setSelectedMealType('lunch')}
+              className={`py-2 px-2 rounded-lg text-sm font-medium transition-all ${
+                selectedMealType === 'lunch'
+                  ? 'bg-green-500 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <div className="text-lg">☀️</div>
+              <div>점심</div>
+            </button>
+            <button
+              onClick={() => setSelectedMealType('dinner')}
+              className={`py-2 px-2 rounded-lg text-sm font-medium transition-all ${
+                selectedMealType === 'dinner'
+                  ? 'bg-green-500 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <div className="text-lg">🌙</div>
+              <div>저녁</div>
+            </button>
+            <button
+              onClick={() => setSelectedMealType('snack')}
+              className={`py-2 px-2 rounded-lg text-sm font-medium transition-all ${
+                selectedMealType === 'snack'
+                  ? 'bg-green-500 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <div className="text-lg">🍪</div>
+              <div>간식</div>
+            </button>
+          </div>
+        </div>
+
+        {/* 이미지 업로드 영역 - 모바일 최적화 */}
+        <div className="mb-6">
         <label
           htmlFor="meal-upload"
-          className="block w-full border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer active:border-green-500 active:bg-green-50 transition"
+          className="block w-full border-2 border-dashed border-green-300 bg-white rounded-2xl p-10 text-center cursor-pointer hover:border-green-500 hover:bg-green-50/50 active:scale-[0.98] transition-all duration-200 shadow-sm"
         >
-          <div className="text-4xl mb-3">📸</div>
-          <div className="text-slate-700 font-medium mb-1">이미지 업로드</div>
-          <div className="text-xs text-slate-500">터치하여 이미지를 추가하세요</div>
+          <div className="text-5xl mb-4">📸</div>
+          <div className="text-slate-800 font-semibold text-lg mb-1">음식 이미지 업로드</div>
+          <div className="text-sm text-slate-500">여러 이미지를 한 번에 업로드할 수 있습니다</div>
           <input
             id="meal-upload"
             type="file"
@@ -407,19 +493,30 @@ export default function MealDiaryPage() {
         </div>
       )}
 
-      {/* 분석 버튼 */}
-      {images.length > 0 && !images[0].predictions && (
-        <button
-          onClick={handleAnalyze}
-          disabled={isAnalyzing}
-          className="w-full bg-green-500 text-white py-4 rounded-xl font-semibold hover:bg-green-600 transition disabled:bg-slate-300 disabled:cursor-not-allowed"
-        >
-          {isAnalyzing ? '분석 중...' : '식단 분석 시작'}
-        </button>
-      )}
+        {/* 분석 버튼 */}
+        {images.length > 0 && !images[0].predictions && (
+          <button
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
+            className={`w-full py-4 rounded-2xl font-bold text-white transition-all shadow-md ${
+              isAnalyzing
+                ? 'bg-slate-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 active:scale-95'
+            }`}
+          >
+            {isAnalyzing ? (
+              <div className="flex flex-col items-center gap-2">
+                <div className="animate-spin text-2xl">🔄</div>
+                <div className="text-sm">{loadingMessage}</div>
+              </div>
+            ) : (
+              `✨ 분석 시작 (${images.length}개)`
+            )}
+          </button>
+        )}
 
-      {/* 저장 버튼 */}
-      {images.length > 0 && images[0].predictions && (
+        {/* 저장 버튼 */}
+        {images.length > 0 && images[0].predictions && (
         <>
           <button
             onClick={() => {
@@ -439,14 +536,25 @@ export default function MealDiaryPage() {
               }
             }}
             disabled={isSaving}
-            className="w-full bg-blue-500 text-white py-4 rounded-xl font-semibold hover:bg-blue-600 transition shadow-md disabled:bg-slate-300 disabled:cursor-not-allowed"
+            className={`w-full py-4 rounded-2xl font-bold text-white transition-all shadow-md ${
+              isSaving
+                ? 'bg-slate-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 active:scale-95'
+            }`}
           >
-            {isSaving ? '저장 중...' : '선택한 음식 저장하기'}
+            {isSaving ? '💾 저장 중...' : '✅ 선택한 음식 저장하기'}
           </button>
 
           {/* 진행 상황 표시 */}
-          <div className="mt-3 text-center text-sm text-slate-600">
-            {completedImages.size} / {images.length} 개 완료
+          <div className="mt-3 text-center">
+            <div className="inline-flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm">
+              <span className="text-sm font-medium text-slate-600">
+                {completedImages.size} / {images.length} 개 완료
+              </span>
+              {completedImages.size === images.length && (
+                <span className="text-green-500">✓</span>
+              )}
+            </div>
           </div>
         </>
       )}
@@ -519,6 +627,7 @@ export default function MealDiaryPage() {
           animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         `}</style>
+      </div>
       </div>
     );
   }
