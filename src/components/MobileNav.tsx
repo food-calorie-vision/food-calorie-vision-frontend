@@ -31,6 +31,12 @@ const MobileNav = () => {
       icon: '💬',
       activeIcon: '💬'
     },
+    { 
+      name: '설정', 
+      href: '/settings', 
+      icon: '⚙️',
+      activeIcon: '⚙️'
+    },
   ];
 
   return (

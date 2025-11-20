@@ -50,6 +50,25 @@ export default function IngredientPage() {
   const [images, setImages] = useState<IngredientImage[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzingProgress, setAnalyzingProgress] = useState({ current: 0, total: 0 });
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
+  
+  // 재치있는 로딩 메시지 배열
+  const funnyLoadingMessages = [
+    '🔍 식재료 인식 시작!',
+    '🤖 AI가 냉장고 속을 열심히 관찰 중...',
+    '📸 이미지 분석 중...',
+    '🥕 식재료 데이터베이스 검색 중...',
+    '🎯 최적의 매칭 찾는 중...',
+    '✨ 거의 다 왔어요!'
+  ];
+  
+  const recommendLoadingMessages = [
+    '🤖 GPT가 레시피 책 뒤지는 중...',
+    '👨‍🍳 영양사가 메뉴 고민 중...',
+    '🍳 건강한 레시피 찾는 중...',
+    '📊 칼로리 계산 중...',
+    '✨ 맛있는 추천 준비 중!'
+  ];
   
   // 추천 관련 상태
   const [flowStep, setFlowStep] = useState<'input' | 'recommend' | 'cooking' | 'complete'>('input');
@@ -58,6 +77,7 @@ export default function IngredientPage() {
   const [cookingSteps, setCookingSteps] = useState<CookingStep[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+  const [selectedMealType, setSelectedMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('lunch');
   
   // 재료 확인 모달 상태
   const [showIngredientModal, setShowIngredientModal] = useState(false);
@@ -135,6 +155,15 @@ export default function IngredientPage() {
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
+    
+    // 재치있는 로딩 메시지 순차 표시
+    let messageIndex = 0;
+    setLoadingMessage(funnyLoadingMessages[0]);
+    
+    const messageInterval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % funnyLoadingMessages.length;
+      setLoadingMessage(funnyLoadingMessages[messageIndex]);
+    }, 2000); // 2초마다 메시지 변경
 
     try {
       const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -144,6 +173,8 @@ export default function IngredientPage() {
       
       if (imagesToAnalyze.length === 0) {
         alert('분석할 이미지가 없습니다.');
+        clearInterval(messageInterval);
+        setLoadingMessage('');
         setIsAnalyzing(false);
         return;
       }
@@ -238,10 +269,14 @@ export default function IngredientPage() {
       );
 
       alert(`✅ ${results.length}개 이미지 분석 완료!`);
+      clearInterval(messageInterval);
+      setLoadingMessage('');
       
     } catch (error) {
       console.error('❌ 전체 분석 프로세스 실패:', error);
       alert('식재료 분석 중 오류가 발생했습니다.');
+      clearInterval(messageInterval);
+      setLoadingMessage('');
     } finally {
       setIsAnalyzing(false);
       setAnalyzingProgress({ current: 0, total: 0 });
@@ -337,6 +372,15 @@ export default function IngredientPage() {
   const handleGetRecommendations = async () => {
     setIsLoadingRecommendations(true);
     
+    // 재치있는 로딩 메시지 순차 표시
+    let messageIndex = 0;
+    setLoadingMessage(recommendLoadingMessages[0]);
+    
+    const messageInterval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % recommendLoadingMessages.length;
+      setLoadingMessage(recommendLoadingMessages[messageIndex]);
+    }, 2000);
+    
     try {
       const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const response = await fetch(`${apiEndpoint}/api/v1/ingredients/recommendations`, {
@@ -356,6 +400,10 @@ export default function IngredientPage() {
 
       const result = await response.json();
       
+      console.log('🔍 추천 API 응답:', result);
+      console.log('📝 응답 메시지:', result.message);
+      console.log('📊 재료 개수:', result.data?.total_ingredients);
+      
       if (result.success && result.data) {
         // 추천 결과 표시 (모달이나 새 섹션으로)
         setRecommendedFoods(parseRecommendations(result.data.recommendations));
@@ -363,9 +411,13 @@ export default function IngredientPage() {
       } else {
         alert('추천을 가져올 수 없습니다.');
       }
+      clearInterval(messageInterval);
+      setLoadingMessage('');
     } catch (error) {
       console.error('❌ 음식 추천 오류:', error);
       alert('음식 추천을 가져오는 중 오류가 발생했습니다. 환경 변수(OPENAI_API_KEY)가 설정되었는지 확인해주세요.');
+      clearInterval(messageInterval);
+      setLoadingMessage('');
     } finally {
       setIsLoadingRecommendations(false);
     }
@@ -493,6 +545,59 @@ export default function IngredientPage() {
           <p className="text-sm text-slate-600">
             냉장고 속 식재료 이미지를 업로드하면 AI가 자동으로 인식해드립니다
           </p>
+        </div>
+
+        {/* 식사 유형 선택 */}
+        <div className="mb-6 bg-white rounded-2xl p-4 shadow-sm">
+          <label className="block text-sm font-medium text-slate-700 mb-3">
+            식사 유형 선택
+          </label>
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => setSelectedMealType('breakfast')}
+              className={`py-2 px-2 rounded-lg text-sm font-medium transition-all ${
+                selectedMealType === 'breakfast'
+                  ? 'bg-green-500 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <div className="text-lg">🌅</div>
+              <div>아침</div>
+            </button>
+            <button
+              onClick={() => setSelectedMealType('lunch')}
+              className={`py-2 px-2 rounded-lg text-sm font-medium transition-all ${
+                selectedMealType === 'lunch'
+                  ? 'bg-green-500 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <div className="text-lg">☀️</div>
+              <div>점심</div>
+            </button>
+            <button
+              onClick={() => setSelectedMealType('dinner')}
+              className={`py-2 px-2 rounded-lg text-sm font-medium transition-all ${
+                selectedMealType === 'dinner'
+                  ? 'bg-green-500 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <div className="text-lg">🌙</div>
+              <div>저녁</div>
+            </button>
+            <button
+              onClick={() => setSelectedMealType('snack')}
+              className={`py-2 px-2 rounded-lg text-sm font-medium transition-all ${
+                selectedMealType === 'snack'
+                  ? 'bg-green-500 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <div className="text-lg">🍪</div>
+              <div>간식</div>
+            </button>
+          </div>
         </div>
 
         {/* 이미지 업로드 영역 */}
@@ -683,7 +788,7 @@ export default function IngredientPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    분석 중...
+                    {loadingMessage || '분석 중...'}
                   </div>
                   {analyzingProgress.total > 0 && (
                     <div className="text-sm font-normal">
@@ -744,7 +849,7 @@ export default function IngredientPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  추천 불러오는 중...
+                  {loadingMessage || '추천 불러오는 중...'}
                 </span>
               ) : (
                 '🍽️ 보유 식재료로 음식 추천받기'
@@ -777,9 +882,19 @@ export default function IngredientPage() {
               </button>
             </div>
 
-            <div className="text-sm bg-amber-50 border-2 border-amber-200 p-4 rounded-xl mb-4">
-              ⚠️ <strong>면책 조항:</strong> 본 추천은 AI 기반 일반적인 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다. 
-              건강 상태나 질병이 있는 경우 반드시 전문의와 상담하시기 바랍니다.
+            {/* 안내 문구들 */}
+            <div className="space-y-3 mb-4">
+              <div className="text-sm bg-green-50 border-2 border-green-200 p-4 rounded-xl text-center">
+                <div className="text-lg mb-1">🥗</div>
+                <div className="font-medium text-green-800">
+                  다양한 재료를 추가해 더욱 풍성한 레시피를 만나보세요!
+                </div>
+              </div>
+              
+              <div className="text-sm bg-amber-50 border-2 border-amber-200 p-4 rounded-xl">
+                ⚠️ <strong>면책 조항:</strong> 본 추천은 AI 기반 일반적인 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다. 
+                건강 상태나 질병이 있는 경우 반드시 전문의와 상담하시기 바랍니다.
+              </div>
             </div>
 
             {recommendedFoods.map((food, index) => (
@@ -884,27 +999,86 @@ export default function IngredientPage() {
                           credentials: 'include',
                         });
                         
+                        console.log('🌐 API 응답 상태:', ingredientsResponse.status);
+                        
                         if (checkAuthAndRedirect(ingredientsResponse)) {
                           return;
                         }
                         
                         const ingredientsResult = await ingredientsResponse.json();
+                        console.log('📦 API 전체 응답:', ingredientsResult);
+                        
                         const userIngredients = ingredientsResult.data || [];
                         
+                        console.log('='.repeat(60));
+                        console.log('🔍 DB에서 조회한 사용자 식재료 (총 ' + userIngredients.length + '개):');
+                        userIngredients.forEach((ing: any, idx: number) => {
+                          console.log(`  ${idx + 1}. "${ing.ingredient_name}" - 수량: ${ing.count}, is_used: ${ing.is_used}`);
+                        });
+                        console.log('📋 레시피 필요 재료:', selectedFood.ingredients);
+                        console.log('='.repeat(60));
+                        
                         // 사용할 재료 목록 생성
-                        const ingredientsData = selectedFood.ingredients.map((ingredientName) => {
-                          const found = userIngredients.find((ing: any) => ing.ingredient_name === ingredientName && !ing.is_used);
+                        const ingredientsData = selectedFood.ingredients.map((ingredientName, index) => {
+                          console.log(`\n[재료 ${index + 1}/${selectedFood.ingredients.length}] "${ingredientName}" 매칭 시작...`);
+                          
+                          // 재료 이름 매칭 (부분 일치 포함)
+                          const found = userIngredients.find((ing: any) => {
+                            const dbName = ing.ingredient_name.toLowerCase().trim();
+                            const recipeName = ingredientName.toLowerCase().trim();
+                            
+                            console.log(`  🔎 비교: DB "${dbName}" vs 레시피 "${recipeName}"`);
+                            
+                            // 정확히 일치
+                            if (dbName === recipeName) {
+                              console.log(`    ✅ 정확히 일치!`);
+                              return true;
+                            }
+                            
+                            // 부분 일치 (최소 2글자 이상)
+                            if (dbName.length >= 2 && recipeName.length >= 2) {
+                              if (dbName.includes(recipeName)) {
+                                console.log(`    ✅ DB가 레시피 포함 (${dbName} includes ${recipeName})`);
+                                return true;
+                              }
+                              if (recipeName.includes(dbName)) {
+                                console.log(`    ✅ 레시피가 DB 포함 (${recipeName} includes ${dbName})`);
+                                return true;
+                              }
+                            }
+                            
+                            return false;
+                          });
+                          
+                          if (found) {
+                            console.log(`  ✅ 매칭 성공: "${found.ingredient_name}", 수량: ${found.count}, is_used: ${found.is_used}`);
+                          } else {
+                            console.log(`  ❌ 매칭 실패: DB에 없음`);
+                          }
+                          
+                          // is_used가 false인 재료만 카운트
+                          const availableCount = found && !found.is_used ? found.count : 0;
+                          
+                          console.log(`  📊 최종 보유 수량: ${availableCount}개`);
+                          
                           return {
                             name: ingredientName,
                             quantity: 1, // 기본 1개
-                            available: found ? found.count : 0
+                            available: availableCount
                           };
                         });
+                        
+                        console.log('\n' + '='.repeat(60));
+                        console.log('✅ 최종 재료 수량 데이터:');
+                        ingredientsData.forEach((item, idx) => {
+                          console.log(`  ${idx + 1}. "${item.name}" - 사용량: ${item.quantity}, 보유: ${item.available}개`);
+                        });
+                        console.log('='.repeat(60));
                         
                         setIngredientsWithQuantity(ingredientsData);
                         setShowIngredientModal(true);
                       } catch (error) {
-                        console.error('재료 조회 오류:', error);
+                        console.error('❌ 재료 조회 오류:', error);
                         alert('재료 정보를 불러오는데 실패했습니다.');
                       }
                     }}
@@ -989,7 +1163,7 @@ export default function IngredientPage() {
                             name: ing.name,
                             quantity: ing.quantity
                           })),
-                          meal_type: '점심',
+                          meal_type: selectedMealType || 'lunch',  // ✨ 사용자가 선택한 식사 유형 사용
                           portion_size_g: 300.0,
                           memo: `${selectedFood.name} 조리 완료`
                         }),
