@@ -100,8 +100,15 @@ export default function Dashboard() {
       
       <main className="max-w-md mx-auto px-4 py-6">
         {/* 페이지 제목 - 모바일 최적화 */}
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">MY PAGE</h1>
+          <button
+            onClick={() => router.push('/food-history')}
+            className="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 active:scale-95 transition shadow-sm flex items-center gap-2"
+          >
+            <span>🍽️</span>
+            <span>먹은 음식 확인</span>
+          </button>
         </div>
 
         {/* 메인 콘텐츠 - 모바일 세로 레이아웃 */}

@@ -57,6 +57,15 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.setItem('login_expire', expireTime.toString());
         sessionStorage.setItem('user_id', data.user_id); // BIGINT user_id 저장
         
+        // 세션 정보 콘솔 출력
+        const sessionDurationSeconds = 10 * 60; // 10분을 초로 환산
+        const expireDate = new Date(expireTime);
+        console.log('=== 세션 정보 ===');
+        console.log('📌 User ID:', data.user_id);
+        console.log('⏱️ 세션 유지 시간:', sessionDurationSeconds, '초 (', sessionDurationSeconds / 60, '분)');
+        console.log('🔄 세션 갱신 시간:', expireDate.toLocaleString('ko-KR'));
+        console.log('================');
+        
         // 사용자 정보 가져오기 (닉네임 확인)
         try {
           const userResponse = await fetch('http://localhost:8000/api/v1/auth/me', {
@@ -108,6 +117,16 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     if (expire && Date.now() < Number(expire)) {
       const newExpireTime = Date.now() + 10 * 60 * 1000;
       sessionStorage.setItem('login_expire', newExpireTime.toString());
+      
+      // 세션 갱신 정보 콘솔 출력
+      const userId = sessionStorage.getItem('user_id');
+      const sessionDurationSeconds = 10 * 60;
+      const expireDate = new Date(newExpireTime);
+      console.log('=== 세션 갱신 ===');
+      console.log('📌 User ID:', userId);
+      console.log('⏱️ 세션 유지 시간:', sessionDurationSeconds, '초 (', sessionDurationSeconds / 60, '분)');
+      console.log('🔄 세션 갱신 시간:', expireDate.toLocaleString('ko-KR'));
+      console.log('================');
     }
   };
 
