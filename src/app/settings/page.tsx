@@ -49,16 +49,17 @@ export default function SettingsPage() {
     { id: 'htn', name: '고혈압', priority: 2 },
     { id: 'liver', name: '간질환', priority: 3 },
   ]);
-  const [mealNoti, setMealNoti] = useState(true);
-  const [calorieNoti, setCalorieNoti] = useState(false);
-  const [allergyNoti, setAllergyNoti] = useState(true);
   const [nickname, setNickname] = useState('user1234');
+  const [heightCm, setHeightCm] = useState<string>(''); // cm
+  const [weightKg, setWeightKg] = useState<string>(''); // kg
 
   const [openAddAllergy, setOpenAddAllergy] = useState(false);
   const [openAddDisease, setOpenAddDisease] = useState(false);
   const [openAccountModal, setOpenAccountModal] = useState(false);
   const [inputName, setInputName] = useState('');
   const [formNick, setFormNick] = useState('');
+  const [formHeight, setFormHeight] = useState('');
+  const [formWeight, setFormWeight] = useState('');
   const [formPwd, setFormPwd] = useState('');
   const [formNewPwd, setFormNewPwd] = useState('');
 
@@ -128,10 +129,9 @@ export default function SettingsPage() {
         );
       }
 
-      if (typeof s.mealNoti === 'boolean') setMealNoti(s.mealNoti);
-      if (typeof s.calorieNoti === 'boolean') setCalorieNoti(s.calorieNoti);
-      if (typeof s.allergyNoti === 'boolean') setAllergyNoti(s.allergyNoti);
-      if (s.nickname) setNickname(s.nickname);
+      if (s.nickname) setNickname(String(s.nickname));
+      if (s.heightCm !== undefined) setHeightCm(String(s.heightCm));
+      if (s.weightKg !== undefined) setWeightKg(String(s.weightKg));
     } catch {
       // JSON 파싱 실패 시 무시
     }
@@ -140,7 +140,13 @@ export default function SettingsPage() {
   const persist = () =>
     localStorage.setItem(
       'settings-demo',
-      JSON.stringify({ allergies, diseases, mealNoti, calorieNoti, allergyNoti, nickname }),
+      JSON.stringify({
+        allergies,
+        diseases,
+        nickname,
+        heightCm,
+        weightKg,
+      }),
     );
 
   const onAddAllergy = () => {
@@ -185,16 +191,23 @@ export default function SettingsPage() {
   };
 
   const openEditAccount = () => {
-    setFormNick(nickname);
+    setFormNick(nickname || '');
+    setFormHeight(heightCm || '');
+    setFormWeight(weightKg || '');
     setFormPwd('');
     setFormNewPwd('');
     setOpenAccountModal(true);
   };
+
   const saveAccount = () => {
     if (!formNick.trim()) return toast('닉네임을 입력하세요.');
-    if ((formPwd && !formNewPwd) || (!formPwd && formNewPwd))
+    if ((formPwd && !formNewPwd) || (!formPwd && formNewPwd)) {
       return toast('현재/새 비밀번호를 모두 입력하거나 모두 비워주세요.');
+    }
+    // TODO: 비밀번호 변경 API 연동 시 여기에서 호출
     setNickname(formNick.trim());
+    setHeightCm(formHeight.trim());
+    setWeightKg(formWeight.trim());
     persist();
     setOpenAccountModal(false);
     toast('계정 정보가 저장되었습니다.');
@@ -250,11 +263,12 @@ export default function SettingsPage() {
           <div className="text-4xl mb-2">⚙️</div>
           <h1 className="text-xl font-bold text-gray-900">설정</h1>
           <p className="text-sm text-gray-500 mt-1">
-            건강 정보, 알림, 계정 설정을 관리해 보세요.
+            건강 정보와 계정 정보를 관리해 보세요.
           </p>
         </div>
 
         <div className="space-y-5">
+          {/* 건강 정보 */}
           <SectionCard title="건강 정보" subtitle="알러지·질환 설정">
             {/* 알러지 설정 */}
             <div className="space-y-2">
@@ -339,31 +353,26 @@ export default function SettingsPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="알림 설정" subtitle="식단/칼로리/알러지 푸시">
-            <ToggleRow label="식단 등록 알림" checked={mealNoti} onChange={setMealNoti} />
-            <ToggleRow
-              label="하루 목표 칼로리 초과 시 알림"
-              checked={calorieNoti}
-              onChange={setCalorieNoti}
-            />
-            <ToggleRow
-              label="알러지 포함 식품 감지 시 알림"
-              checked={allergyNoti}
-              onChange={setAllergyNoti}
-            />
-          </SectionCard>
-
-          <SectionCard title="계정" subtitle="닉네임/비밀번호">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-700">
-                닉네임 <span className="text-gray-500">{nickname}</span>
+          {/* 계정 */}
+          <SectionCard title="계정" subtitle="닉네임/비밀번호/신체정보">
+            <div className="space-y-2 text-sm text-gray-700">
+              <div className="flex items-center justify-between">
+                <span>닉네임 <span className="text-gray-500">{nickname || '-'}</span></span>
               </div>
-              <button
-                onClick={openEditAccount}
-                className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
-              >
-                계정 수정
-              </button>
+              <div className="flex items-center justify-between">
+                <span>키 <span className="text-gray-500">{heightCm ? `${heightCm} cm` : '-'}</span></span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>몸무게 <span className="text-gray-500">{weightKg ? `${weightKg} kg` : '-'}</span></span>
+              </div>
+              <div className="pt-1">
+                <button
+                  onClick={openEditAccount}
+                  className="text-sm px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  계정 수정
+                </button>
+              </div>
             </div>
           </SectionCard>
 
@@ -413,6 +422,30 @@ export default function SettingsPage() {
                 placeholder="닉네임을 입력하세요"
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">키 (cm)</label>
+                <input
+                  inputMode="decimal"
+                  value={formHeight}
+                  onChange={(e) => setFormHeight(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="예: 164"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">몸무게 (kg)</label>
+                <input
+                  inputMode="decimal"
+                  value={formWeight}
+                  onChange={(e) => setFormWeight(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="예: 52.3"
+                />
+              </div>
+            </div>
+
             <div className="text-xs text-gray-500">비밀번호 변경(선택)</div>
             <div>
               <label className="block text-sm text-gray-700 mb-1">현재 비밀번호</label>
@@ -434,6 +467,7 @@ export default function SettingsPage() {
                 placeholder="새 비밀번호"
               />
             </div>
+
             <div className="flex justify-end gap-2 pt-1">
               <button
                 onClick={() => setOpenAccountModal(false)}
@@ -442,10 +476,7 @@ export default function SettingsPage() {
                 취소
               </button>
               <button
-                onClick={() => {
-                  setOpenAccountModal(false);
-                  saveAccount();
-                }}
+                onClick={saveAccount}
                 className="px-4 py-2 text-sm rounded-lg text-white bg-green-500 hover:bg-green-600"
               >
                 저장
@@ -479,36 +510,6 @@ function SectionCard({
       </div>
       {children}
     </section>
-  );
-}
-
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-gray-800 text-sm">{label}</span>
-      <button
-        type="button"
-        aria-pressed={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
-          checked ? 'bg-green-500' : 'bg-gray-300'
-        }`}
-      >
-        <span
-          className={`inline-block h-6 w-6 transform rounded-full bg-white transition ${
-            checked ? 'translate-x-6' : 'translate-x-1'
-          }`}
-        />
-      </button>
-    </div>
   );
 }
 
@@ -624,4 +625,3 @@ function AddNameForm({
     </div>
   );
 }
-
