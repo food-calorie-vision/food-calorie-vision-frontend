@@ -5,8 +5,11 @@ import { useRouter, usePathname } from 'next/navigation';
 
 interface SessionContextType {
   isAuthenticated: boolean;
+  userName: string;
+  sessionRemaining: number | null;
   checkSession: () => Promise<boolean>;
   refreshSession: () => Promise<void>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
 }
 
@@ -16,6 +19,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userName, setUserName] = useState('');
+  const [sessionRemaining, setSessionRemaining] = useState<number | null>(null);
   const [showExpiredModal, setShowExpiredModal] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
@@ -24,20 +29,34 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // 세션 체크
   const checkSession = useCallback(async (): Promise<boolean> => {
     try {
+      const startTime = Date.now();
       const response = await fetch(`${API_URL}/api/v1/auth/me`, {
         credentials: 'include',
       });
+      const elapsed = Date.now() - startTime;
 
       if (response.ok) {
+        const data = await response.json();
         setIsAuthenticated(true);
+        setUserName(data.nickname || data.username || '');
+        setSessionRemaining(data.session_remaining || null);
+        
+        const minutes = data.session_remaining ? Math.floor(data.session_remaining / 60) : 0;
+        const seconds = data.session_remaining ? data.session_remaining % 60 : 0;
+        console.log(`✅ 세션 체크 성공 (${elapsed}ms) - User: ${data.nickname || data.username}, 남은시간: ${minutes}분 ${seconds}초`);
         return true;
       } else {
         setIsAuthenticated(false);
+        setUserName('');
+        setSessionRemaining(null);
+        console.log(`❌ 세션 체크 실패 (${elapsed}ms) - Status: ${response.status}`);
         return false;
       }
     } catch (error) {
-      console.error('세션 체크 실패:', error);
+      console.error('❌ 세션 체크 에러:', error);
       setIsAuthenticated(false);
+      setUserName('');
+      setSessionRemaining(null);
       return false;
     }
   }, [API_URL]);
@@ -47,26 +66,84 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated) return;
 
     try {
-      await fetch(`${API_URL}/api/v1/auth/refresh-session`, {
+      const response = await fetch(`${API_URL}/api/v1/auth/refresh-session`, {
         method: 'POST',
         credentials: 'include',
       });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // 갱신 후 즉시 남은 시간 업데이트
+        setSessionRemaining(data.session_max_age);
+        console.log(`🔄 세션 갱신 성공 - 새 유효시간: ${data.session_max_age}초 (즉시 반영)`);
+      } else {
+        console.error(`❌ 세션 갱신 실패 - Status: ${response.status}`);
+      }
     } catch (error) {
-      console.error('세션 갱신 실패:', error);
+      console.error('❌ 세션 갱신 에러:', error);
     }
   }, [API_URL, isAuthenticated]);
+
+  // 로그인
+  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+    try {
+      console.log(`🔐 로그인 시도 - Email: ${email}`);
+      
+      const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        console.log(`✅ 로그인 성공 - User ID: ${data.user_id}`);
+        setIsAuthenticated(true);
+        
+        // 사용자 정보 가져오기
+        const userResponse = await fetch(`${API_URL}/api/v1/auth/me`, {
+          credentials: 'include',
+        });
+        
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          setUserName(userData.nickname || userData.username || '');
+          console.log(`👤 사용자 정보 로드 완료 - ${userData.nickname || userData.username}`);
+        } else {
+          setUserName(data.username || email);
+        }
+        
+        return true;
+      } else {
+        console.log(`❌ 로그인 실패 - ${data.message}`);
+        alert(data.message || '이메일 또는 비밀번호가 올바르지 않습니다');
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ 로그인 에러:', error);
+      alert('로그인 중 오류가 발생했습니다.');
+      return false;
+    }
+  }, [API_URL]);
 
   // 로그아웃
   const logout = useCallback(async () => {
     try {
+      console.log('🚪 로그아웃 시도...');
       await fetch(`${API_URL}/api/v1/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       });
+      console.log('✅ 로그아웃 성공');
     } catch (error) {
-      console.error('로그아웃 실패:', error);
+      console.error('❌ 로그아웃 실패:', error);
     } finally {
       setIsAuthenticated(false);
+      setUserName('');
+      setSessionRemaining(null);
+      console.log('🔄 로그인 페이지로 이동');
       router.push('/');
     }
   }, [API_URL, router]);
@@ -96,19 +173,39 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     initCheck();
   }, [pathname, checkSession, handleSessionExpired]);
 
-  // 1분마다 세션 체크
+  // 10초마다 세션 체크 (테스트용 - 프로덕션에서는 60000으로 변경)
   useEffect(() => {
     if (pathname === '/' || pathname === '/login') return;
 
+    console.log(`⏰ 세션 체크 타이머 시작 (10초마다)`);
+
     const interval = setInterval(async () => {
+      console.log(`🔍 정기 세션 체크 실행...`);
       const valid = await checkSession();
       if (!valid && isAuthenticated) {
+        console.log(`⚠️ 세션 만료 감지!`);
         handleSessionExpired();
       }
-    }, 60000); // 1분
+    }, 10000); // 10초 (테스트용)
 
-    return () => clearInterval(interval);
+    return () => {
+      console.log(`⏰ 세션 체크 타이머 종료`);
+      clearInterval(interval);
+    };
   }, [pathname, checkSession, isAuthenticated, handleSessionExpired]);
+
+  // 페이지 이동 시 세션 갱신
+  useEffect(() => {
+    if (pathname === '/' || pathname === '/login' || !isAuthenticated) return;
+    
+    console.log('🔀 페이지 이동 감지 - 세션 갱신:', pathname);
+    const doRefresh = async () => {
+      await refreshSession();
+      // 갱신 후 세션 체크로 정확한 값 확인
+      await checkSession();
+    };
+    doRefresh();
+  }, [pathname, isAuthenticated, refreshSession, checkSession]);
 
   // 사용자 활동 시 세션 갱신
   useEffect(() => {
@@ -119,18 +216,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     const handleActivity = () => {
       const now = Date.now();
-      // 30초마다 한 번만 갱신 (너무 자주 호출 방지)
-      if (now - lastRefresh > 30000) {
+      // 10초마다 한 번만 갱신 (테스트용 - 프로덕션에서는 30000으로 변경)
+      if (now - lastRefresh > 10000) {
+        console.log('👆 사용자 활동 감지 - 세션 갱신 요청:', new Date().toLocaleTimeString());
         refreshSession();
         lastRefresh = now;
       }
     };
+
+    console.log('🎯 활동 감지 리스너 등록:', events.join(', '));
 
     events.forEach(event => {
       window.addEventListener(event, handleActivity);
     });
 
     return () => {
+      console.log('🎯 활동 감지 리스너 해제');
       events.forEach(event => {
         window.removeEventListener(event, handleActivity);
       });
@@ -150,7 +251,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SessionContext.Provider value={{ isAuthenticated, checkSession, refreshSession, logout }}>
+    <SessionContext.Provider value={{ isAuthenticated, userName, sessionRemaining, checkSession, refreshSession, login, logout }}>
       {children}
 
       {/* 세션 만료 모달 */}

@@ -539,7 +539,7 @@ export default function IngredientPage() {
       <div className="max-w-2xl mx-auto p-4 pb-8">
         {/* 헤더 */}
         <div className="mb-6 text-center">
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">
+          <h2 className="text-3xl font-bold text-slate-900 mb-2">
             🥕 식재료 입력
           </h2>
           <p className="text-sm text-slate-600">
@@ -548,7 +548,7 @@ export default function IngredientPage() {
         </div>
 
         {/* 식사 유형 선택 */}
-        <div className="mb-6 bg-white rounded-2xl p-4 shadow-sm">
+        <div className="mb-6 bg-white rounded-2xl p-4 shadow-sm hidden">
           <label className="block text-sm font-medium text-slate-700 mb-3">
             식사 유형 선택
           </label>
@@ -1101,6 +1101,55 @@ export default function IngredientPage() {
                 실제 사용한 재료의 수량을 확인하고 조정해주세요.
               </p>
               
+              {/* 식사 유형 선택 */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  식사 유형
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  <button
+                    onClick={() => setSelectedMealType('breakfast')}
+                    className={`py-2 rounded-lg text-xs font-medium transition ${
+                      selectedMealType === 'breakfast'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    🌅<br/>아침
+                  </button>
+                  <button
+                    onClick={() => setSelectedMealType('lunch')}
+                    className={`py-2 rounded-lg text-xs font-medium transition ${
+                      selectedMealType === 'lunch'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    ☀️<br/>점심
+                  </button>
+                  <button
+                    onClick={() => setSelectedMealType('dinner')}
+                    className={`py-2 rounded-lg text-xs font-medium transition ${
+                      selectedMealType === 'dinner'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    🌙<br/>저녁
+                  </button>
+                  <button
+                    onClick={() => setSelectedMealType('snack')}
+                    className={`py-2 rounded-lg text-xs font-medium transition ${
+                      selectedMealType === 'snack'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    🍪<br/>간식
+                  </button>
+                </div>
+              </div>
+
               <div className="space-y-3 mb-6 max-h-96 overflow-y-auto">
                 {ingredientsWithQuantity.map((ingredient, index) => (
                   <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">

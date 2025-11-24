@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
 import { ArrowLeft, MessageSquare, CheckCircle, Clock } from 'lucide-react';
+import { useSession } from '@/contexts/SessionContext';
 
 type Inquiry = {
   inquiry_id: number;
@@ -22,15 +23,14 @@ type Inquiry = {
 
 export default function ContactListPage() {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
+  const { isAuthenticated, userName, logout } = useSession();
   const [userId, setUserId] = useState<number | null>(null);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 로그인 상태 확인 (API 기반)
+  // userId 가져오기
   useEffect(() => {
-    const checkAuth = async () => {
+    const fetchUserId = async () => {
       try {
         const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
@@ -39,27 +39,17 @@ export default function ContactListPage() {
 
         if (response.ok) {
           const data = await response.json();
-          if (data.user_id) {
-            setIsLoggedIn(true);
-            setUserName(data.nickname || data.username);
-            setUserId(data.user_id);
-          } else {
-            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/');
-          }
-        } else if (response.status === 401 || response.status === 403) {
-          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/');
+          setUserId(data.user_id);
         }
       } catch (error) {
-        console.error('인증 확인 실패:', error);
-        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-        router.push('/');
+        console.error('사용자 정보 조회 실패:', error);
       }
     };
 
-    checkAuth();
-  }, [router]);
+    if (isAuthenticated) {
+      fetchUserId();
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (userId) {
@@ -85,35 +75,6 @@ export default function ContactListPage() {
     }
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('login_expire');
-      sessionStorage.removeItem('user_name');
-      alert('로그아웃되었습니다.');
-      router.push('/');
-    }
-  };
-
-  // 세션 만료 체크
-  useEffect(() => {
-    const sessionCheckInterval = setInterval(() => {
-      const expire = sessionStorage.getItem('login_expire');
-      if (expire && Date.now() >= Number(expire)) {
-        setIsLoggedIn(false);
-        setUserName('');
-        sessionStorage.removeItem('login_expire');
-        sessionStorage.removeItem('user_name');
-        sessionStorage.removeItem('user_id');
-        alert('오래 활동하지 않아 자동 로그아웃되었습니다.\n다시 로그인해주세요.');
-        router.push('/');
-      }
-    }, 10000);
-
-    return () => clearInterval(sessionCheckInterval);
-  }, [router]);
-
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -127,7 +88,7 @@ export default function ContactListPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
       
       <div className="max-w-md mx-auto px-4 py-6 pb-24">
         {/* 뒤로가기 */}
