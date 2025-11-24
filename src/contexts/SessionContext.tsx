@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { API_BASE_URL } from '@/utils/api';
 
 interface SessionContextType {
   isAuthenticated: boolean;
@@ -24,7 +25,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [showExpiredModal, setShowExpiredModal] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const API_URL = API_BASE_URL;
 
   // 세션 체크
   const checkSession = useCallback(async (): Promise<boolean> => {
@@ -290,4 +291,3 @@ export function useSession() {
   }
   return context;
 }
-

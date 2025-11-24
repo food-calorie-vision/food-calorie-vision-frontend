@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { API_BASE_URL } from '@/utils/api';
 
 /**
  * 인증 체크 훅
@@ -18,9 +19,8 @@ export function useAuth(enabled: boolean = true) {
 
     const checkAuth = async () => {
       try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-          credentials: 'include',
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
+            credentials: 'include',
         });
 
         if (response.status === 401 || response.status === 403) {
@@ -51,4 +51,3 @@ export function useAuth(enabled: boolean = true) {
 
   return { checkAuthAndRedirect };
 }
-

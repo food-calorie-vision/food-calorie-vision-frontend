@@ -5,6 +5,7 @@ import { Award, TrendingUp, TrendingDown } from 'lucide-react';
 import Link from 'next/link';
 import { translateHealthGoal } from '@/utils/healthGoalTranslator';
 import { ScoreData } from '@/types';
+import { API_BASE_URL } from '@/utils/api';
 
 interface MyScoreProps {
   userInfo?: any; // 사용자 정보
@@ -17,10 +18,8 @@ const MyScore = ({ userInfo }: MyScoreProps) => {
   useEffect(() => {
     const fetchScoreData = async () => {
       try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        
         // 대시보드 통계에서 평균 건강 점수 가져오기
-        const response = await fetch(`${apiEndpoint}/api/v1/meals/dashboard-stats`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/meals/dashboard-stats`, {
           method: 'GET',
           credentials: 'include', // 세션 쿠키 포함
         });
