@@ -443,8 +443,15 @@ export default function MealDiaryPage() {
               const targetImage = images.find(img => img.id === r.id);
               const firstCandidateName = targetImage?.predictions?.[0]?.name;
               
-              if (r.name && r.name !== firstCandidateName) {
-                console.log(`🔄 사용자가 다른 후보를 선택했습니다: ${r.name}`);
+              // 직접 입력한 경우 또는 다른 후보를 선택한 경우
+              const isCustomInput = !targetImage?.predictions?.some(p => p.name === r.name);
+              
+              if (r.name && (isCustomInput || r.name !== firstCandidateName)) {
+                if (isCustomInput) {
+                  console.log(`✏️ 사용자가 직접 입력했습니다: ${r.name}`);
+                } else {
+                  console.log(`🔄 사용자가 다른 후보를 선택했습니다: ${r.name}`);
+                }
                 
                 try {
                   const response = await fetch(`${apiEndpoint}/api/v1/food/reanalyze-with-selection`, {
@@ -467,11 +474,34 @@ export default function MealDiaryPage() {
                       const analysis = result.data.analysis;
                       setImages(prev => prev.map(img => {
                         if (img.id === r.id) {
+                          // 직접 입력한 경우: 새로운 prediction 추가
+                          if (isCustomInput) {
+                            const newPrediction: FoodPrediction = {
+                              name: r.name,
+                              confidence: 1.0,
+                              selected: true,
+                              ingredients: r.ingredients,
+                              calories: analysis.calories,
+                              nutrients: analysis.nutrients,
+                              portionSize: analysis.portionSize,
+                              healthScore: analysis.healthScore,
+                              suggestions: analysis.suggestions,
+                            };
+                            
+                            return {
+                              ...img,
+                              predictions: [
+                                newPrediction,
+                                ...(img.predictions?.map(p => ({ ...p, selected: false })) || [])
+                              ],
+                            };
+                          }
+                          
+                          // 기존 후보 선택한 경우: 해당 prediction 업데이트
                           return {
                             ...img,
                             predictions: img.predictions?.map(pred => {
                               if (pred.name === r.name) {
-                                // 선택한 후보에 영양소 정보 업데이트
                                 return {
                                   ...pred,
                                   selected: true,
@@ -493,6 +523,20 @@ export default function MealDiaryPage() {
                 } catch (error) {
                   console.error('❌ 재분석 실패:', error);
                 }
+              } else {
+                // 1순위를 그대로 선택한 경우: predictions에서 selected 업데이트
+                setImages(prev => prev.map(img => {
+                  if (img.id === r.id) {
+                    return {
+                      ...img,
+                      predictions: img.predictions?.map(pred => ({
+                        ...pred,
+                        selected: pred.name === r.name
+                      })),
+                    };
+                  }
+                  return img;
+                }));
               }
               
               setCompletedImages((prev) => new Set(prev).add(r.id));

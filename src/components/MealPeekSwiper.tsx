@@ -16,7 +16,7 @@ type UploadedImage = {
   predictions?: FoodPrediction[];
 };
 
-type Phase = 'name' | 'ingredients' | 'done';
+type Phase = 'name' | 'custom_input' | 'ingredients' | 'done';
 
 type Props = {
   images: UploadedImage[];
@@ -38,6 +38,8 @@ export default function MealPeekSwiper({
   const [phaseById, setPhaseById] = useState<Record<string, Phase>>({});
   const [pickedNameById, setPickedNameById] = useState<Record<string, string | null>>({});
   const [pickedIngrById, setPickedIngrById] = useState<Record<string, string[]>>({});
+  const [customFoodName, setCustomFoodName] = useState<string>('');
+  const [customIngredients, setCustomIngredients] = useState<string>('');
 
   // 이미지 변경 시 초기화
   useEffect(() => {
@@ -122,6 +124,43 @@ export default function MealPeekSwiper({
     setPickedIngrById((prev) => ({ ...prev, [current.id]: [] })); // 재료 선택 초기화
   };
 
+  const openCustomInput = () => {
+    setPhaseById((prev) => ({ ...prev, [current.id]: 'custom_input' }));
+    setCustomFoodName('');
+    setCustomIngredients('');
+  };
+
+  const confirmCustomFood = () => {
+    if (!customFoodName.trim()) {
+      alert('음식 이름을 입력해주세요.');
+      return;
+    }
+    
+    // 직접 입력한 음식명 저장
+    setPickedNameById((prev) => ({ ...prev, [current.id]: customFoodName.trim() }));
+    
+    // 재료 파싱 (콤마 또는 공백으로 구분)
+    const ingredients = customIngredients
+      .split(/[,\s]+/)
+      .map(i => i.trim())
+      .filter(i => i.length > 0);
+    
+    setPickedIngrById((prev) => ({ ...prev, [current.id]: ingredients }));
+    
+    // 완료 처리
+    setPhaseById((prev) => ({ ...prev, [current.id]: 'done' }));
+    onConfirmItem?.({
+      id: current.id,
+      name: customFoodName.trim(),
+      ingredients: ingredients,
+    });
+    
+    // 다중 이미지인 경우에만 자동으로 다음 이미지로 전환
+    if (images.length > 1) {
+      setTimeout(() => goNext(), autoSwipeDelayMs);
+    }
+  };
+
   return (
     <div className="w-full max-w-3xl mx-auto mb-8">
       {/* 진행 표시 */}
@@ -171,7 +210,7 @@ export default function MealPeekSwiper({
             className="relative z-10 bg-white border border-slate-200 rounded-2xl shadow-md h-full overflow-hidden flex flex-col"
             style={{ touchAction: 'pan-y' }}  // 모바일 세로 스크롤 충돌 방지
           >
-            <div className="h-56 relative flex-shrink-0">
+            <div className="h-48 relative flex-shrink-0">
               <img src={current.url} alt="meal" className="w-full h-full object-cover" />
               
               {/* 삭제 버튼 - 우측 상단 */}
@@ -275,6 +314,80 @@ export default function MealPeekSwiper({
                         </button>
                       );
                     })}
+                    
+                    {/* 직접 입력 버튼 */}
+                    <button
+                      onClick={openCustomInput}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition"
+                    >
+                      <span className="text-lg">✏️</span>
+                      <span className="font-medium">해당 음식이 없나요? 직접 입력하기</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {current.predictions && phase === 'custom_input' && (
+                <div className="flex flex-col h-full">
+                  <div className="flex-shrink-0 mb-3">
+                    <p className="text-lg font-bold text-slate-900 mb-1">음식 직접 입력</p>
+                    <p className="text-xs text-slate-600">원하는 음식이 목록에 없다면 직접 입력해주세요.</p>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                    {/* 음식 이름 입력 */}
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                        음식 이름 <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={customFoodName}
+                        onChange={(e) => setCustomFoodName(e.target.value)}
+                        placeholder="예: 엄마표 김치찌개"
+                        className="w-full px-3 py-2.5 text-base border-2 border-slate-200 rounded-lg focus:border-blue-400 focus:outline-none transition"
+                      />
+                    </div>
+                    
+                    {/* 재료 입력 (선택) */}
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                        주재료 (선택)
+                      </label>
+                      <input
+                        type="text"
+                        value={customIngredients}
+                        onChange={(e) => setCustomIngredients(e.target.value)}
+                        placeholder="예: 김치, 돼지고기, 두부"
+                        className="w-full px-3 py-2.5 text-base border-2 border-slate-200 rounded-lg focus:border-blue-400 focus:outline-none transition"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        콤마(,)로 구분하여 입력해주세요
+                      </p>
+                    </div>
+                    
+                    {/* 안내 메시지 */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5">
+                      <p className="text-xs text-blue-700 leading-relaxed">
+                        💡 <b>직접 입력한 음식은</b> 나만의 음식 DB에 저장되어, 다음에 같은 음식을 먹을 때 자동으로 추천됩니다!
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* 버튼 */}
+                  <div className="mt-3 flex-shrink-0 space-y-2">
+                    <button
+                      onClick={confirmCustomFood}
+                      className="w-full px-4 py-2.5 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 transition shadow-sm text-sm"
+                    >
+                      확인
+                    </button>
+                    <button
+                      onClick={goBackToNameSelection}
+                      className="w-full px-4 py-2.5 rounded-lg bg-white border-2 border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition text-sm"
+                    >
+                      뒤로 가기
+                    </button>
                   </div>
                 </div>
               )}
@@ -316,8 +429,17 @@ export default function MealPeekSwiper({
               )}
 
               {current.predictions && phase === 'done' && (
-                <div className="text-sm text-slate-500">
-                  {images.length > 1 ? '확인 완료! 다음 사진으로 이동합니다…' : '확인 완료! ✅'}
+                <div className="flex flex-col items-center justify-center h-full space-y-3">
+                  <div className="text-5xl">✅</div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-green-600 mb-1">확인 완료!</p>
+                    <p className="text-sm text-slate-600">
+                      선택한 음식: <span className="font-semibold text-slate-900">{pickedNameById[current.id]}</span>
+                    </p>
+                    {images.length > 1 && (
+                      <p className="text-xs text-slate-500 mt-2">다음 사진으로 이동합니다...</p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

@@ -695,6 +695,18 @@ export default function RecommendPage() {
     setLoadingRecipeDetail(false);
   };
 
+  // 재치있는 식단 추천 로딩 메시지 배열
+  const funnyDietLoadingMessages = [
+    '🏋️ 최고의 트레이너에게 식단 분석 받는 중...',
+    '🤫 몰래 다른 거 찾아보는 중...',
+    '📊 칼로리 계산하는 중...',
+    '😰 좌절하고 추천받은 식단 계산해보기...',
+    '🥗 건강한 식단 찾는 중...',
+    '💪 영양소 균형 맞추는 중...',
+    '🎯 당신에게 딱 맞는 식단 찾는 중...',
+    '✨ 거의 다 왔어요!'
+  ];
+
   // 식단 추천 채팅 보내기
   const sendDietChat = async () => {
     if (!dietChatInput.trim() || dietLoading) return;
@@ -705,28 +717,28 @@ export default function RecommendPage() {
     setDietMessages((prev) => [...prev, { role: "user", text: userText }]);
     setDietLoading(true);
     
-    // 실제 진행 과정에 맞춰 상태 표시
-    let seconds = 0;
-    const startTime = Date.now();
+    // 재치있는 로딩 메시지 순환
+    let messageIndex = 0;
+    setDietLoadingStatus({ text: funnyDietLoadingMessages[0], seconds: 0 });
     
-    const updateLoadingTime = () => {
-      seconds = Math.floor((Date.now() - startTime) / 1000);
-      setDietLoadingStatus((prev) => ({ ...prev, seconds }));
-    };
-    
-    const timeInterval = setInterval(updateLoadingTime, 1000);
+    const messageInterval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % funnyDietLoadingMessages.length;
+      setDietLoadingStatus({ 
+        text: funnyDietLoadingMessages[messageIndex], 
+        seconds: 0 
+      });
+    }, 2000); // 2초마다 메시지 변경
 
     try {
       const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       
-      // 1단계: 사용자 인증 확인
-      setDietLoadingStatus({ text: "사용자 인증 확인 중", seconds: 0 });
+      // 사용자 인증 확인
       const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
         credentials: 'include',
       });
       
       if (!authRes.ok) {
-        clearInterval(timeInterval);
+        clearInterval(messageInterval);
         setDietMessages((prev) => [
           ...prev,
           { role: "bot", text: "⚠️ 로그인이 필요합니다. 로그인 페이지로 이동해주세요." },
@@ -739,9 +751,6 @@ export default function RecommendPage() {
       const authData = await authRes.json();
       const userId = authData.user_id;
       
-      // 2단계: 건강 정보 및 식단 분석 중
-      setDietLoadingStatus({ text: "건강 정보 확인 및 식단 분석 중", seconds });
-      
       // 실제 백엔드 API 호출
       const res = await fetch(`${apiEndpoint}/api/v1/recommend/diet-plan?user_id=${userId}`, {
         method: "POST",
@@ -753,8 +762,6 @@ export default function RecommendPage() {
         }),
       });
 
-      // 3단계: 식단 추천 완료
-      setDietLoadingStatus({ text: "식단 추천 완료", seconds });
       const result = await res.json();
 
       if (result.success && result.data) {
@@ -818,7 +825,7 @@ export default function RecommendPage() {
         { role: "bot", text: "❌ 서버와 통신 중 문제가 발생했습니다. 나중에 다시 시도해주세요." },
       ]);
     } finally {
-      clearInterval(timeInterval);
+      clearInterval(messageInterval);
       setDietLoading(false);
       setDietLoadingStatus({ text: "", seconds: 0 });
     }
@@ -1554,7 +1561,7 @@ export default function RecommendPage() {
                       <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
                         <span>
-                          {dietLoadingStatus.text}... {dietLoadingStatus.seconds > 0 && `(${dietLoadingStatus.seconds}초)`}
+                          {dietLoadingStatus.text}
                         </span>
                       </div>
                     )}
