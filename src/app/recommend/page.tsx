@@ -89,10 +89,10 @@ const getFoodClassFromName = (recipeName: string): string => {
 const INITIAL_BOT_MESSAGE: ChatMessage = {
   role: "bot",
   text:
-    "안녕하세요! KCalculator 레시피 도우미입니다.\n" +
-    "먹고 싶은 음식을 말씀해주시면 건강 상태를 고려한 레시피를 추천해드릴게요 🍳\n" +
-    "예) '나 오늘 대창 먹을건데 레시피 추천해줘', '삼겹살 요리하고 싶어'\n\n" +
-    "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다.",
+    "안녕하세요! KCalculator 음식 도우미입니다.\n" +
+    "원하시는 레시피 또는 식단을 말씀해주시면 건강 상태와 취향을 고려해 맞춤 추천해드릴게요 🍽️\n" +
+    "예) '대창 레시피 추천해줘', '삼겹살 요리하고 싶어', '고기 위주 식단 추천해줘', '내가 가진 재료로 식단 짜줘'\n\n" +
+    "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다."
 };
 
 // 더미 식단 카드 데이터
@@ -170,7 +170,12 @@ export default function RecommendPage() {
   // 식단 추천 상태 (diet 탭용)
   const [dietFlowStep, setDietFlowStep] = useState<"chat" | "select" | "cooking" | "complete">("chat");
   const [dietMessages, setDietMessages] = useState<ChatMessage[]>([
-    { role: "bot", text: "안녕하세요! 식단 추천 도우미입니다.\n식단 추천을 원하시면 말씀해주세요 🥗\n예) '요즘 고기류를 먹고 싶은데 식단 추천해줘', '내가 가진 식재료 기반으로 식단 짜줘'\n\n⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다." }
+    { role: "bot", text: 
+      "안녕하세요! KCalculator 음식 도우미입니다.\n" +
+      "원하시는 레시피 또는 식단을 말씀해주시면 건강 상태와 취향을 고려해 맞춤 추천해드릴게요 🍽️\n" +
+      "예) '대창 레시피 추천해줘', '삼겹살 요리하고 싶어', '고기 위주 식단 추천해줘', '내가 가진 재료로 식단 짜줘'\n\n" +
+      "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다."
+}
   ]);
   const [dietChatInput, setDietChatInput] = useState("");
   const [dietLoading, setDietLoading] = useState(false);
@@ -258,7 +263,13 @@ export default function RecommendPage() {
     if (dietFlowStep !== "chat") {
       setDietFlowStep("chat");
       setDietMessages([
-        { role: "bot", text: "안녕하세요! 식단 추천 도우미입니다.\n식단 추천을 원하시면 말씀해주세요 🥗\n예) '요즘 고기류를 먹고 싶은데 식단 추천해줘', '내가 가진 식재료 기반으로 식단 짜줘'\n\n⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다." }
+        { role: "bot", 
+          text: 
+            "안녕하세요! KCalculator 음식 도우미입니다.\n" +
+            "원하시는 레시피 또는 식단을 말씀해주시면 건강 상태와 취향을 고려해 맞춤 추천해드릴게요 🍽️\n" +
+            "예) '대창 레시피 추천해줘', '삼겹살 요리하고 싶어', '고기 위주 식단 추천해줘', '내가 가진 재료로 식단 짜줘'\n\n" +
+            "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다."
+        }
       ]);
     }
   };
