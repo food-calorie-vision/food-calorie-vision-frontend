@@ -1,37 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
+import { useSession } from '@/contexts/SessionContext';
 
 export default function MockPage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const expire = sessionStorage.getItem('login_expire');
-      const user = sessionStorage.getItem('user_name');
-      
-      if (expire && Date.now() < Number(expire)) {
-        setIsLoggedIn(true);
-        setUserName(user || '');
-      }
-    }
-  }, []);
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('login_expire');
-      sessionStorage.removeItem('user_name');
-      alert('로그아웃되었습니다.');
-    }
-  };
+  const { isAuthenticated, userName, logout } = useSession();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <Header isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
 
       {/* 메인 섹션 */}
       <section className="max-w-7xl mx-auto px-4 py-16 md:py-24">
