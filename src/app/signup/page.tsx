@@ -12,6 +12,7 @@ import {
   Pill,
   Activity,
   AtSign,
+  Mail, // ★ 추가
 } from 'lucide-react';
 import { API_BASE_URL } from '@/utils/api';
 
@@ -25,6 +26,8 @@ interface SignupFormData {
   username: string;
   password: string;
   confirmPassword: string;
+  /** 이메일 */
+  email: string;            
   nickname: string;
   birthdate: string;
   gender: Gender;
@@ -37,6 +40,34 @@ interface SignupFormData {
 
   comorbidities: string;
   healthGoalNote: string;
+}
+
+/** 에러 메시지 파서(FastAPI 대응) */
+function extractErrorMessage(data: any): string {
+  try {
+    if (!data) return '회원가입에 실패했습니다.';
+    if (typeof data === 'string') return data;
+    const d = (data as any).detail;
+    if (d !== undefined) {
+      if (typeof d === 'string') return d;
+      if (Array.isArray(d) && d.length > 0) {
+        const x = d[0];
+        if (typeof x === 'string') return x;
+        if (x?.msg) {
+          const loc = x?.loc ? ` (${Array.isArray(x.loc) ? x.loc.join('.') : x.loc})` : '';
+          return `${x.msg}${loc}`;
+        }
+        return JSON.stringify(x);
+      }
+      if (typeof d === 'object' && d !== null) {
+        if ((d as any).msg) return (d as any).msg;
+        return JSON.stringify(d);
+      }
+    }
+    return (data.message || data.error || JSON.stringify(data));
+  } catch {
+    return '회원가입에 실패했습니다.';
+  }
 }
 
 /** 라벨 + 아이콘 박스 */
@@ -76,6 +107,7 @@ export default function SignupPage() {
     username: '',
     password: '',
     confirmPassword: '',
+    email: '',                 
     nickname: '',
     birthdate: '',
     gender: '',
@@ -103,6 +135,7 @@ export default function SignupPage() {
     return true;
   }, [f]);
 
+  /** 빈 값 제거 유틸 */
   const prune = (obj: Record<string, any>) => {
     const out: Record<string, any> = {};
     Object.entries(obj).forEach(([k, v]) => {
@@ -119,37 +152,35 @@ export default function SignupPage() {
 
     try {
       const age = birthToAge(f.birthdate);
+
+      // ▶ 회원가입 API가 받는 필드만 전송
       const payloadRaw = {
         username: f.username.trim(),
         password: f.password,
         nickname: f.nickname.trim() || f.username.trim(),
+        email: f.email?.trim(),        
         gender: f.gender || null,
-
         age: age ?? null,
         weight: f.weight ? parseFloat(f.weight) : null,
         height: f.height ? parseFloat(f.height) : null,
         health_goal: f.healthGoal,
-
-        has_allergy: f.hasAllergy === '' ? null : f.hasAllergy === 'yes',
-        allergy_triggers: f.allergyTriggers.trim() || null,
-
-        comorbidities: f.comorbidities.trim() || null,
-        health_goal_note: f.healthGoalNote.trim() || null,
       };
 
       const res = await fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(prune(payloadRaw)),
         credentials: 'omit',
+        body: JSON.stringify(prune(payloadRaw)),
       });
 
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && (data.success ?? true)) {
+      let data: any = null;
+      try { data = await res.json(); } catch { /* 빈 응답 대비 */ }
+
+      if (res.ok && (data?.success ?? true)) {
         alert('회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.');
         window.location.href = '/';
       } else {
-        alert(data.detail || data.message || '회원가입에 실패했습니다.');
+        alert(extractErrorMessage(data));
       }
     } catch (e) {
       console.error(e);
@@ -229,6 +260,18 @@ export default function SignupPage() {
                 </div>
               </Field>
 
+              {/* 이메일(필수)  */}
+              <Field icon={<Mail className="w-5 h-5" />}>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="이메일 (필수)"
+                  value={f.email}
+                  onChange={onChange}
+                  className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
+                />
+              </Field>
+
               {/* 닉네임 */}
               <Field icon={<User className="w-5 h-5" />}>
                 <input
@@ -263,7 +306,6 @@ export default function SignupPage() {
                     key={g.k}
                     type="button"
                     onClick={() => setF((s) => ({ ...s, gender: g.k }))}
-
                     className={`py-3 rounded-xl border text-sm font-medium ${
                       f.gender === g.k
                         ? 'border-emerald-600 bg-emerald-500 text-white shadow'
