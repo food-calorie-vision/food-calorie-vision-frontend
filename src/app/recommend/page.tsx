@@ -8,6 +8,8 @@ import MobileHeader from "@/components/MobileHeader";
 import MobileNav from "@/components/MobileNav";
 import { useSession } from "@/contexts/SessionContext";
 import { API_BASE_URL } from "@/utils/api";
+import TypingIndicator from "@/components/chat/TypingIndicator";
+import ChatBubble from "@/components/chat/ChatBubble";
 
 type FlowStep = "chat" | "select" | "cooking" | "complete";
 type RecipeAgentActionType =
@@ -145,15 +147,21 @@ const getFoodClassFromName = (recipeName: string): string => {
   return '요리';
 };
 
-// 챗봇 초기 안내 메시지
-const INITIAL_BOT_MESSAGE: ChatMessage = {
-  role: "bot",
-  text:
-    "안녕하세요! KCalculator 음식 도우미입니다.\n" +
-    "원하시는 레시피 또는 식단을 말씀해주시면 건강 상태와 취향을 고려해 맞춤 추천해드릴게요 🍽️\n" +
-    "예) '대창 레시피 추천해줘', '삼겹살 요리하고 싶어', '고기 위주 식단 추천해줘', '내가 가진 재료로 식단 짜줘'\n\n" +
-    "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다."
-};
+// 챗봇 초기 안내 메시지 배열 (레시피)
+const INITIAL_RECIPE_MESSAGES: ChatMessage[] = [
+  { role: "bot", text: "안녕하세요! KCalculator 레시피 도우미입니다. 🍳" },
+  { role: "bot", text: "어떤 요리가 궁금하세요? 원하시는 레시피를 말씀해주시면 맞춤 추천해드릴게요." },
+  { role: "bot", text: "예) '대창 레시피 추천해줘', '닭가슴살이랑 브로콜리 있는데 요리법 알려줘'" },
+  { role: "bot", text: "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다." }
+];
+
+// 챗봇 초기 안내 메시지 배열 (식단)
+const INITIAL_DIET_MESSAGES: ChatMessage[] = [
+  { role: "bot", text: "안녕하세요! KCalculator 식단 도우미입니다. 🥗" },
+  { role: "bot", text: "건강 목표와 취향에 맞는 식단을 추천해드릴게요." },
+  { role: "bot", text: "예) '고기 위주 식단 추천해줘', '다이어트용 저칼로리 식단 짜줘'" },
+  { role: "bot", text: "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다." }
+];
 
 const detectMealTypeFromText = (text: string): string | null => {
   const normalized = text.replace(/\s+/g, "").toLowerCase();
@@ -226,11 +234,45 @@ export default function RecommendPage() {
   const [flowStep, setFlowStep] = useState<FlowStep>("chat");
   
   // 챗봇 상태
-  const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_BOT_MESSAGE]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState({ text: "", seconds: 0 });
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
+
+  // 초기 메시지 순차 표시 함수
+  const startInitialMessageSequence = (
+    messageSetter: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+    loadingSetter: React.Dispatch<React.SetStateAction<boolean>>,
+    messagesToShow: ChatMessage[]
+  ) => {
+    // 기존 타임아웃 클리어
+    timeoutsRef.current.forEach(clearTimeout);
+    timeoutsRef.current = [];
+    
+    messageSetter([]);
+    loadingSetter(true);
+    setLoadingStatus({ text: "메시지를 불러오는 중", seconds: 0 });
+
+    let totalDelay = 200; // 첫 메시지 표시 전 0.2초 대기 (속도 개선)
+
+    messagesToShow.forEach((msg, index) => {
+      const timeout = setTimeout(() => {
+        messageSetter((prev) => [...prev, msg]);
+        
+        if (index === messagesToShow.length - 1) {
+          loadingSetter(false);
+          setLoadingStatus({ text: "", seconds: 0 });
+        }
+      }, totalDelay);
+
+      timeoutsRef.current.push(timeout);
+      
+      // 다음 메시지 딜레이: 기본 0.3초 + 메시지 길이에 비례 (속도 개선)
+      totalDelay += 300 + msg.text.length * 20;
+    });
+  };
   
   // 재치있는 로딩 메시지 배열
   const funnyRecipeLoadingMessages = [
@@ -268,14 +310,7 @@ export default function RecommendPage() {
 
   // 식단 추천 상태 (diet 탭용)
   const [dietFlowStep, setDietFlowStep] = useState<"chat" | "select" | "cooking" | "complete">("chat");
-  const [dietMessages, setDietMessages] = useState<ChatMessage[]>([
-    { role: "bot", text: 
-      "안녕하세요! KCalculator 음식 도우미입니다.\n" +
-      "원하시는 레시피 또는 식단을 말씀해주시면 건강 상태와 취향을 고려해 맞춤 추천해드릴게요 🍽️\n" +
-      "예) '대창 레시피 추천해줘', '삼겹살 요리하고 싶어', '고기 위주 식단 추천해줘', '내가 가진 재료로 식단 짜줘'\n\n" +
-      "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다."
-}
-  ]);
+  const [dietMessages, setDietMessages] = useState<ChatMessage[]>([]);
   const [dietChatInput, setDietChatInput] = useState("");
   const [dietLoading, setDietLoading] = useState(false);
   const [dietLoadingStatus, setDietLoadingStatus] = useState({ text: "", seconds: 0 }); // 식단 추천 로딩 상태 추가
@@ -309,6 +344,25 @@ export default function RecommendPage() {
   const [modalMessage, setModalMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // 컴포넌트 마운트 또는 탭 변경 시 초기 메시지 표시
+  useEffect(() => {
+    if (currentTab === "recipe") {
+      // 사용자 메시지가 없다면, 초기 안내 상태로 간주하고 애니메이션 실행
+      if (!messages.some(m => m.role === 'user')) {
+        startInitialMessageSequence(setMessages, setIsLoading, INITIAL_RECIPE_MESSAGES);
+      }
+    } else if (currentTab === "diet") {
+      // 사용자 메시지가 없다면, 초기 안내 상태로 간주하고 애니메이션 실행
+      if (!dietMessages.some(m => m.role === 'user')) {
+        startInitialMessageSequence(setDietMessages, setDietLoading, INITIAL_DIET_MESSAGES);
+      }
+    }
+
+    // 컴포넌트 언마운트 시 타임아웃 클리어
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout);
+    };
+  }, [currentTab]);
 
 
   // 채팅 메시지 자동 스크롤
@@ -316,28 +370,11 @@ export default function RecommendPage() {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [messages, isLoading, loadingRecipeDetail]);
+  }, [messages, isLoading, loadingRecipeDetail, dietMessages, dietLoading]);
 
   // 탭 변경
   const handleTabChange = (tab: "recipe" | "diet") => {
     router.push(`/recommend?tab=${tab}`);
-    // 탭 전환 시 상태 초기화
-    if (flowStep !== "chat") {
-      setFlowStep("chat");
-      setMessages([INITIAL_BOT_MESSAGE]);
-    }
-    if (dietFlowStep !== "chat") {
-      setDietFlowStep("chat");
-      setDietMessages([
-        { role: "bot", 
-          text: 
-            "안녕하세요! KCalculator 음식 도우미입니다.\n" +
-            "원하시는 레시피 또는 식단을 말씀해주시면 건강 상태와 취향을 고려해 맞춤 추천해드릴게요 🍽️\n" +
-            "예) '대창 레시피 추천해줘', '삼겹살 요리하고 싶어', '고기 위주 식단 추천해줘', '내가 가진 재료로 식단 짜줘'\n\n" +
-            "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다."
-        }
-      ]);
-    }
   };
 
 
@@ -830,7 +867,7 @@ export default function RecommendPage() {
   // 처음으로 돌아가기
   const resetFlow = () => {
     setFlowStep("chat");
-    setMessages([INITIAL_BOT_MESSAGE]);
+    startInitialMessageSequence(setMessages, setIsLoading, INITIAL_RECIPE_MESSAGES);
     setRecommendedRecipes([]);
     setSelectedRecipe(null);
     setSelectedMealType(null);
@@ -1207,9 +1244,7 @@ export default function RecommendPage() {
   // 식단 흐름 초기화
   const resetDietFlow = () => {
     setDietFlowStep("chat");
-    setDietMessages([
-      { role: "bot", text: "안녕하세요! 식단 추천 도우미입니다.\n식단 추천을 원하시면 말씀해주세요 🥗\n예) '요즘 고기류를 먹고 싶은데 식단 추천해줘', '내가 가진 식재료 기반으로 식단 짜줘'\n\n⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다." }
-    ]);
+    startInitialMessageSequence(setDietMessages, setDietLoading, INITIAL_DIET_MESSAGES);
     setRecommendedDietPlans([]);
     setSelectedDietPlan(null);
   };
@@ -1261,20 +1296,17 @@ export default function RecommendPage() {
                 </div>
 
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                  <div ref={chatContainerRef} className="space-y-3 mb-4 min-h-[400px] max-h-[500px] overflow-y-auto scroll-smooth">
+                  <div ref={chatContainerRef} className="space-y-4 mb-4 min-h-[400px] max-h-[500px] overflow-y-auto scroll-smooth flex flex-col p-2">
                     {messages.map((m, idx) => (
-                      <div key={idx}>
-                        {/* 사용자 메시지는 기존대로 */}
-                        {m.role === "user" ? (
-                          <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-line bg-green-500 text-white ml-auto shadow">
+                      <div key={idx} className="flex flex-col">
+                        {m.role === 'user' ? (
+                          <ChatBubble role="user">
                             {m.text}
-                          </div>
+                          </ChatBubble>
                         ) : (
-                          /* 봇 메시지 */
-                          <div>
-                            {/* 건강 경고가 있으면 별도의 경고 메시지 버블로 표시 */}
+                          <>
                             {m.healthWarning ? (
-                              <div className="max-w-[95%] rounded-lg px-4 py-3 text-sm leading-relaxed bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-300 shadow-sm">
+                              <ChatBubble role="bot" className="!bg-gradient-to-r !from-red-50 !to-orange-50 !border-red-300 !shadow-sm">
                                 <div className="flex items-start gap-2">
                                   <div className="text-xl">⚠️</div>
                                   <div className="flex-1">
@@ -1284,11 +1316,9 @@ export default function RecommendPage() {
                                     </div>
                                   </div>
                                 </div>
-                              </div>
+                              </ChatBubble>
                             ) : (
-                              /* 일반 메시지 또는 레시피 추천 메시지 */
-                              <div className="max-w-[95%] rounded-lg px-3 py-3 text-sm leading-relaxed bg-slate-100 text-slate-800 border border-slate-200">
-                                {/* 메시지 텍스트 */}
+                              <ChatBubble role="bot">
                                 <div className="whitespace-pre-line mb-2">
                                   {m.text}
                                 </div>
@@ -1369,59 +1399,60 @@ export default function RecommendPage() {
                                     </button>
                                   </div>
                                 )}
-                            {/* 레시피 카드 표시 - 메시지 내부에 포함 */}
-                            {m.recipeCards && m.recipeCards.length > 0 && (
-                              <div className="mt-2 space-y-2">
-                                <p className="text-xs text-slate-600 font-semibold mb-2">💚 추천 레시피를 선택해주세요:</p>
-                                {m.recipeCards.map((recipe, recipeIdx) => (
-                                  <button
-                                    key={recipeIdx}
-                                    onClick={() => selectRecipe(recipe)}
-                                    disabled={loadingRecipeDetail}
-                                    className="w-full text-left bg-white border-2 border-slate-300 rounded-lg p-2.5 hover:border-green-500 hover:shadow-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
-                                    <div className="font-semibold text-slate-900 mb-2 text-sm">{recipe.name}</div>
-                                    <div className="space-y-1 text-xs text-slate-600">
-                                      {/* 음식 설명 */}
-                                      <div className="leading-relaxed">{recipe.description}</div>
-                                      {/* 칼로리 */}
-                                      {recipe.calories && (
-                                        <div className="text-slate-500">• 칼로리: {recipe.calories}kcal</div>
-                                      )}
-                                      {/* 난이도 */}
-                                      {recipe.difficulty && (
-                                        <div className="text-slate-500">• 난이도: {recipe.difficulty}</div>
-                                      )}
-                                      {/* 소요시간 */}
-                                      {recipe.cooking_time && (
-                                        <div className="text-slate-500">• 소요시간: {recipe.cooking_time}</div>
-                                      )}
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
+                                
+                                {/* 레시피 카드 표시 - 메시지 내부에 포함 */}
+                                {m.recipeCards && m.recipeCards.length > 0 && (
+                                  <div className="mt-2 space-y-2">
+                                    <p className="text-xs text-slate-600 font-semibold mb-2">💚 추천 레시피를 선택해주세요:</p>
+                                    {m.recipeCards.map((recipe, recipeIdx) => (
+                                      <button
+                                        key={recipeIdx}
+                                        onClick={() => selectRecipe(recipe)}
+                                        disabled={loadingRecipeDetail}
+                                        className="w-full text-left bg-white border-2 border-slate-300 rounded-lg p-2.5 hover:border-green-500 hover:shadow-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        <div className="font-semibold text-slate-900 mb-2 text-sm">{recipe.name}</div>
+                                        <div className="space-y-1 text-xs text-slate-600">
+                                          {/* 음식 설명 */}
+                                          <div className="leading-relaxed">{recipe.description}</div>
+                                          {/* 칼로리 */}
+                                          {recipe.calories && (
+                                            <div className="text-slate-500">• 칼로리: {recipe.calories}kcal</div>
+                                          )}
+                                          {/* 난이도 */}
+                                          {recipe.difficulty && (
+                                            <div className="text-slate-500">• 난이도: {recipe.difficulty}</div>
+                                          )}
+                                          {/* 소요시간 */}
+                                          {recipe.cooking_time && (
+                                            <div className="text-slate-500">• 소요시간: {recipe.cooking_time}</div>
+                                          )}
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </ChatBubble>
                             )}
-                              </div>
-                            )}
-                          </div>
+                          </>
                         )}
                       </div>
                     ))}
 
                     {isLoading && (
                       <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
+                        <TypingIndicator />
                         <span>
-                          {loadingStatus.text}... {loadingStatus.seconds > 0 && `(${loadingStatus.seconds}초)`}
+                          {loadingStatus.text}{loadingStatus.text && '...'} {loadingStatus.seconds > 0 && `(${loadingStatus.seconds}초)`}
                         </span>
                       </div>
                     )}
                     
                     {loadingRecipeDetail && (
                       <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
+                        <TypingIndicator />
                         <span>
-                          {loadingStatus.text}... {loadingStatus.seconds > 0 && `(${loadingStatus.seconds}초)`}
+                          {loadingStatus.text}{loadingStatus.text && '...'} {loadingStatus.seconds > 0 && `(${loadingStatus.seconds}초)`}
                         </span>
                       </div>
                     )}
@@ -1695,88 +1726,90 @@ export default function RecommendPage() {
                 </div>
 
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                  <div className="space-y-3 mb-4 min-h-[400px] max-h-[500px] overflow-y-auto">
+                  <div className="space-y-4 mb-4 min-h-[400px] max-h-[500px] overflow-y-auto flex flex-col p-2">
                     {dietMessages.map((m, idx) => (
-                      <div key={idx}>
-                        <div
-                          className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-line ${
-                            m.role === "bot"
-                              ? "bg-slate-100 text-slate-800 border border-slate-200"
-                              : "bg-green-500 text-white ml-auto shadow"
-                          }`}
-                        >
-                          {m.text}
-                        </div>
-                        
-                        {/* 식단 카드 표시 */}
-                        {m.dietCards && m.dietCards.length > 0 && (
-                          <div className="mt-3 space-y-2">
-                            <p className="text-xs text-slate-600 font-medium px-1">💚 추천 식단을 선택해주세요</p>
-                            {m.dietCards.map((plan, planIdx) => (
-                              <button
-                                key={planIdx}
-                                onClick={() => selectDietPlan(plan)}
-                                className="w-full text-left bg-white border-2 border-slate-200 rounded-xl p-3 hover:border-green-400 hover:shadow-md transition-all active:scale-[0.98]"
-                              >
-                                <div className="flex items-start justify-between mb-2">
-                                  <div className="font-medium text-slate-900">{plan.name}</div>
-                                  <div className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full whitespace-nowrap ml-2">
-                                    {plan.totalCalories}
-                                  </div>
-                                </div>
-                                <div className="text-xs text-slate-600 mb-2 leading-relaxed">{plan.description}</div>
-                                
-                                {/* 식사 미리보기 */}
-                                {plan.meals && (
-                                  <div className="space-y-1 mb-2">
-                                    {plan.meals.breakfast && (
-                                      <div className="text-xs text-slate-500">
-                                        <span className="font-semibold">🌅 아침:</span> {plan.meals.breakfast.slice(0, 25)}...
-                                        {plan.meal_details?.breakfast?.calories && (
-                                          <span className="text-green-600 font-semibold ml-1">
-                                            ({plan.meal_details.breakfast.calories}kcal)
-                                          </span>
+                      <div key={idx} className="flex flex-col">
+                        {m.role === 'user' ? (
+                          <ChatBubble role="user">
+                            {m.text}
+                          </ChatBubble>
+                        ) : (
+                          <ChatBubble role="bot">
+                            <div className="whitespace-pre-line">
+                              {m.text}
+                            </div>
+                            
+                            {/* 식단 카드 표시 */}
+                            {m.dietCards && m.dietCards.length > 0 && (
+                              <div className="mt-3 space-y-2">
+                                <p className="text-xs text-slate-600 font-medium px-1">💚 추천 식단을 선택해주세요</p>
+                                {m.dietCards.map((plan, planIdx) => (
+                                  <button
+                                    key={planIdx}
+                                    onClick={() => selectDietPlan(plan)}
+                                    className="w-full text-left bg-white border-2 border-slate-200 rounded-xl p-3 hover:border-green-400 hover:shadow-md transition-all active:scale-[0.98]"
+                                  >
+                                    <div className="flex items-start justify-between mb-2">
+                                      <div className="font-medium text-slate-900">{plan.name}</div>
+                                      <div className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full whitespace-nowrap ml-2">
+                                        {plan.totalCalories}
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-slate-600 mb-2 leading-relaxed">{plan.description}</div>
+                                    
+                                    {/* 식사 미리보기 */}
+                                    {plan.meals && (
+                                      <div className="space-y-1 mb-2">
+                                        {plan.meals.breakfast && (
+                                          <div className="text-xs text-slate-500">
+                                            <span className="font-semibold">🌅 아침:</span> {plan.meals.breakfast.slice(0, 25)}...
+                                            {plan.meal_details?.breakfast?.calories && (
+                                              <span className="text-green-600 font-semibold ml-1">
+                                                ({plan.meal_details.breakfast.calories}kcal)
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                        {plan.meals.lunch && (
+                                          <div className="text-xs text-slate-500">
+                                            <span className="font-semibold">☀️ 점심:</span> {plan.meals.lunch.slice(0, 25)}...
+                                            {plan.meal_details?.lunch?.calories && (
+                                              <span className="text-green-600 font-semibold ml-1">
+                                                ({plan.meal_details.lunch.calories}kcal)
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                        {plan.meals.dinner && (
+                                          <div className="text-xs text-slate-500">
+                                            <span className="font-semibold">🌙 저녁:</span> {plan.meals.dinner.slice(0, 25)}...
+                                            {plan.meal_details?.dinner?.calories && (
+                                              <span className="text-green-600 font-semibold ml-1">
+                                                ({plan.meal_details.dinner.calories}kcal)
+                                              </span>
+                                            )}
+                                          </div>
                                         )}
                                       </div>
                                     )}
-                                    {plan.meals.lunch && (
-                                      <div className="text-xs text-slate-500">
-                                        <span className="font-semibold">☀️ 점심:</span> {plan.meals.lunch.slice(0, 25)}...
-                                        {plan.meal_details?.lunch?.calories && (
-                                          <span className="text-green-600 font-semibold ml-1">
-                                            ({plan.meal_details.lunch.calories}kcal)
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                    {plan.meals.dinner && (
-                                      <div className="text-xs text-slate-500">
-                                        <span className="font-semibold">🌙 저녁:</span> {plan.meals.dinner.slice(0, 25)}...
-                                        {plan.meal_details?.dinner?.calories && (
-                                          <span className="text-green-600 font-semibold ml-1">
-                                            ({plan.meal_details.dinner.calories}kcal)
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                                
-                                <div className="text-xs text-slate-500 border-t border-slate-100 pt-2 mt-2">
-                                  {plan.nutrients}
-                                </div>
-                                
-                                <div className="mt-2 text-green-600 font-medium text-xs">자세히 보기 →</div>
-                              </button>
-                            ))}
-                          </div>
+                                    
+                                    <div className="text-xs text-slate-500 border-t border-slate-100 pt-2 mt-2">
+                                      {plan.nutrients}
+                                    </div>
+                                    
+                                    <div className="mt-2 text-green-600 font-medium text-xs">자세히 보기 →</div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </ChatBubble>
                         )}
                       </div>
                     ))}
 
                     {dietLoading && (
                       <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
+                        <TypingIndicator />
                         <span>
                           {dietLoadingStatus.text}
                         </span>
