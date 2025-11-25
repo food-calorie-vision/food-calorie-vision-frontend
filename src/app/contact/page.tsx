@@ -5,6 +5,7 @@ import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
 import Link from 'next/link';
 import { MessageCircle, Bell, HelpCircle } from 'lucide-react';
+import { useSession } from '@/contexts/SessionContext';
 
 type Announcement = {
   announcement_id: number;
@@ -18,46 +19,15 @@ type Announcement = {
 
 export default function ContactPage() {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
+  const { isAuthenticated, userName, logout } = useSession();
   const [selectedFaq, setSelectedFaq] = useState(0);
   const [notices, setNotices] = useState<Announcement[]>([]);
   const [loadingNotices, setLoadingNotices] = useState(true);
 
-  // 로그인 상태 확인 (API 기반)
+  // 공지사항 불러오기
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user_id) {
-            setIsLoggedIn(true);
-            setUserName(data.nickname || data.username);
-          } else {
-            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/');
-          }
-        } else if (response.status === 401 || response.status === 403) {
-          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/');
-        }
-      } catch (error) {
-        console.error('인증 확인 실패:', error);
-        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-        router.push('/');
-      }
-    };
-
-    checkAuth();
-    
-    // 공지사항 불러오기
     fetchAnnouncements();
-  }, [router]);
+  }, []);
 
   const fetchAnnouncements = async () => {
     try {
@@ -73,16 +43,6 @@ export default function ContactPage() {
     }
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('login_expire');
-      sessionStorage.removeItem('user_name');
-      alert('로그아웃되었습니다.');
-      router.push('/');
-    }
-  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -124,7 +84,7 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
       
       <div className="max-w-md mx-auto px-4 py-6 pb-24 space-y-5">
         {/* 고객센터 헤더 */}
@@ -253,7 +213,7 @@ export default function ContactPage() {
         </div>
       </div>
 
-      {isLoggedIn && <MobileNav />}
+      {isAuthenticated && <MobileNav />}
     </div>
   );
 }

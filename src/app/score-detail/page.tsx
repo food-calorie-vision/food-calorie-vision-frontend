@@ -6,6 +6,7 @@ import { ArrowLeft, TrendingUp, TrendingDown, Target } from 'lucide-react';
 import Link from 'next/link';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
+import { useSession } from '@/contexts/SessionContext';
 
 interface ScoreDetail {
   overallScore: number;
@@ -26,53 +27,9 @@ interface ScoreDetail {
 
 export default function ScoreDetailPage() {
   const router = useRouter();
+  const { isAuthenticated, userName, logout } = useSession();
   const [scoreDetail, setScoreDetail] = useState<ScoreDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
-
-  // 로그인 상태 확인 (API 기반)
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user_id) {
-            setIsLoggedIn(true);
-            setUserName(data.nickname || data.username);
-          } else {
-            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/');
-          }
-        } else if (response.status === 401 || response.status === 403) {
-          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/');
-        }
-      } catch (error) {
-        console.error('인증 확인 실패:', error);
-        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-        router.push('/');
-      }
-    };
-
-    checkAuth();
-  }, [router]);
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('login_expire');
-      sessionStorage.removeItem('user_name');
-      alert('로그아웃되었습니다.');
-      router.push('/');
-    }
-  };
 
   useEffect(() => {
     const fetchScoreDetail = async () => {
@@ -143,7 +100,7 @@ export default function ScoreDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-        <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+        <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
         <div className="max-w-md mx-auto px-4 py-8">
           <div className="animate-pulse space-y-4">
             <div className="h-6 bg-slate-200 rounded"></div>
@@ -159,7 +116,7 @@ export default function ScoreDetailPage() {
   if (!scoreDetail) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-        <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+        <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
         <div className="max-w-md mx-auto px-4 py-8">
           <p className="text-slate-500 text-center">점수 데이터를 불러올 수 없습니다.</p>
         </div>
@@ -169,7 +126,7 @@ export default function ScoreDetailPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
       
       <div className="max-w-md mx-auto px-4 py-6 pb-24">
         {/* 뒤로가기 버튼 */}
@@ -316,7 +273,7 @@ export default function ScoreDetailPage() {
         </div>
       </div>
 
-      {isLoggedIn && <MobileNav />}
+      {isAuthenticated && <MobileNav />}
     </div>
   );
 }

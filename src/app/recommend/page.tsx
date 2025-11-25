@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import MobileHeader from "@/components/MobileHeader";
 import MobileNav from "@/components/MobileNav";
+import { useSession } from "@/contexts/SessionContext";
 import { API_BASE_URL } from "@/utils/api";
 
 type FlowStep = "chat" | "select" | "cooking" | "complete";
@@ -215,11 +216,15 @@ const buildStepsFromMarkdown = (markdown?: string | null): CookingStep[] => {
 export default function RecommendPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+<<<<<<< HEAD
+  const { isAuthenticated, userName, logout } = useSession();
+=======
   const apiEndpoint = API_BASE_URL;
   
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState("");
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+>>>>>>> origin/main
 
   // URL params에서 tab 읽기 (기본값: recipe)
   const currentTab = (searchParams?.get("tab") || "recipe") as "recipe" | "diet";
@@ -311,6 +316,8 @@ export default function RecommendPage() {
   const [modalMessage, setModalMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+<<<<<<< HEAD
+=======
   // 로그인 상태 확인 (페이지 로드 시 한 번만)
   useEffect(() => {
     const checkAuth = async () => {
@@ -344,6 +351,7 @@ export default function RecommendPage() {
 
     checkAuth();
   }, [router, apiEndpoint]);
+>>>>>>> origin/main
 
   // 채팅 메시지 자동 스크롤
   useEffect(() => {
@@ -374,17 +382,6 @@ export default function RecommendPage() {
     }
   };
 
-  // 로그아웃 처리
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName("");
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("login_expire");
-      sessionStorage.removeItem("user_name");
-      alert("로그아웃되었습니다.");
-      router.push("/");
-    }
-  };
 
   // 식사 유형 선택 처리
   const buildConversationHistory = (baseMessages: ChatMessage[]) => {
@@ -1077,7 +1074,7 @@ export default function RecommendPage() {
     if (!selectedDietPlan) return;
     
     // 로그인 확인
-    if (!isLoggedIn) {
+    if (!isAuthenticated) {
       setModalMessage('⚠️ 로그인이 필요합니다.');
       setShowModal(true);
       return;
@@ -1259,21 +1256,10 @@ export default function RecommendPage() {
     setSelectedDietPlan(null);
   };
 
-  // 인증 체크 중
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">로그인 확인 중...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
 
       {/* 상단 탭 버튼 - 모바일 최적화 */}
       <section className="max-w-md mx-auto px-4 py-4">
@@ -2141,7 +2127,7 @@ export default function RecommendPage() {
         )}
       </main>
 
-      {isLoggedIn && <MobileNav />}
+      {isAuthenticated && <MobileNav />}
       
       {/* 모달 */}
       {showModal && (

@@ -1,59 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import ChatInterface from '@/components/ChatInterface';
 import { MealRecommendation } from '@/types';
+import { useSession } from '@/contexts/SessionContext';
 
 export default function RecommendedMealsPage() {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
+  const { isAuthenticated, userName, logout } = useSession();
   const [selectedMeal, setSelectedMeal] = useState<MealRecommendation | null>(null);
-
-  // 로그인 상태 확인 (API 기반)
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user_id) {
-            setIsLoggedIn(true);
-            setUserName(data.nickname || data.username);
-          } else {
-            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/');
-          }
-        } else if (response.status === 401 || response.status === 403) {
-          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/');
-        }
-      } catch (error) {
-        console.error('인증 확인 실패:', error);
-        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-        router.push('/');
-      }
-    };
-
-    checkAuth();
-  }, [router]);
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('login_expire');
-      sessionStorage.removeItem('user_name');
-      alert('로그아웃되었습니다.');
-      router.push('/');
-    }
-  };
   const [mealRecommendations] = useState<MealRecommendation[]>([
     {
       id: 1,
@@ -126,7 +83,7 @@ export default function RecommendedMealsPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <Header isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">추천 식단</h1>

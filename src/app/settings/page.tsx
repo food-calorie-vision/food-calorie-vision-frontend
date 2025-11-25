@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
+import { useSession } from '@/contexts/SessionContext';
 import { API_BASE_URL } from '@/utils/api';
 
 /* ===== Types ===== */
@@ -34,11 +35,7 @@ const toast = (msg: string) => {
 
 export default function SettingsPage() {
   const router = useRouter();
-
-  // 헤더용 로그인 상태
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
-  const [loading, setLoading] = useState(true);
+  const { isAuthenticated, userName, logout } = useSession();
 
   // 설정 상태
   const [allergies, setAllergies] = useState<Allergy[]>([
@@ -64,43 +61,7 @@ export default function SettingsPage() {
   const [formPwd, setFormPwd] = useState('');
   const [formNewPwd, setFormNewPwd] = useState('');
 
-  // 1) 로그인 상태 확인
-  useEffect(() => {
-    const fetchUserInfo = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log('설정 페이지 사용자 정보:', data);
-
-          if (data.user_id) {
-            setIsLoggedIn(true);
-            setUserName(data.nickname || data.username);
-          } else {
-            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/');
-          }
-        } else if (response.status === 401 || response.status === 403) {
-          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/');
-        }
-      } catch (error) {
-        console.error('설정 페이지 사용자 정보 가져오기 실패:', error);
-        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-        router.push('/');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserInfo();
-  }, [router]);
-
-  // 2) 로컬 저장된 설정 값 불러오기
+  // 로컬 저장된 설정 값 불러오기
   useEffect(() => {
     const raw = localStorage.getItem('settings-demo');
     if (!raw) return;
@@ -214,47 +175,13 @@ export default function SettingsPage() {
     toast('계정 정보가 저장되었습니다.');
   };
 
-  const handleLogout = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        setIsLoggedIn(false);
-        setUserName('');
-        sessionStorage.removeItem('login_expire');
-        sessionStorage.removeItem('user_name');
-        sessionStorage.removeItem('user_id');
-        alert('로그아웃되었습니다.');
-        router.push('/');
-      } else {
-        console.error('로그아웃 실패');
-        alert('로그아웃에 실패했습니다.');
-      }
-    } catch (error) {
-      console.error('로그아웃 에러:', error);
-      alert('로그아웃 중 오류가 발생했습니다.');
-    }
-  };
-
-  // 로딩 중일 때
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-xl text-gray-600">로딩 중...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-white mobile-content">
       {/* 상단 공통 헤더 */}
       <MobileHeader
-        isLoggedIn={isLoggedIn}
+        isLoggedIn={isAuthenticated}
         userName={userName}
-        handleLogout={handleLogout}
+        handleLogout={logout}
       />
 
       {/* 메인 컨텐츠 */}

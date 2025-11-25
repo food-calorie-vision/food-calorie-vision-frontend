@@ -181,7 +181,7 @@ export default function ContactListPage() {
         </div>
       </div>
 
-      {isLoggedIn && <MobileNav />}
+      {isAuthenticated && <MobileNav />}
     </div>
   );
 }
