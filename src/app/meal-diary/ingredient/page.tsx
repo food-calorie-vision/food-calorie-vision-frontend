@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 type IngredientPrediction = {
   name: string;
-  count: number;
   selected: boolean;
   confidence?: number;
 };
@@ -53,7 +52,6 @@ type RecommendedFoodPayload = {
 
 type UserIngredientRecord = {
   ingredient_name: string;
-  count: number;
   is_used: boolean;
 };
 
@@ -114,9 +112,51 @@ export default function IngredientPage() {
   // 재료 확인 모달 상태
   const [showIngredientModal, setShowIngredientModal] = useState(false);
   const [ingredientsWithQuantity, setIngredientsWithQuantity] = useState<Array<{name: string, quantity: number, available: number}>>([]);
+  const [ingredientChecks, setIngredientChecks] = useState<{[key: string]: boolean}>({});
   
   // 인증 로딩 상태
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  
+  // Debounce 타이머 (Hook 순서 유지)
+  const debounceTimers = useRef<{[key: string]: NodeJS.Timeout}>({});
+
+  // 수동 입력 핸들러 (Debounce 적용) - Hook 순서 준수를 위해 상단에 배치
+  const handleManualInputChange = useCallback((imageId: string, value: string) => {
+    // 즉시 입력값 업데이트
+    setImages(prev => prev.map(img => 
+      img.id === imageId ? { ...img, manualInput: value } : img
+    ));
+    
+    // 이전 타이머 취소
+    if (debounceTimers.current[imageId]) {
+      clearTimeout(debounceTimers.current[imageId]);
+    }
+    
+    // Debounce: 300ms 대기 후 자동완성 실행
+    debounceTimers.current[imageId] = setTimeout(() => {
+      if (value.trim().length >= 2) {
+        const filtered = KOREAN_INGREDIENTS.filter(ingredient =>
+          ingredient.toLowerCase().includes(value.toLowerCase())
+        ).slice(0, 10);
+        
+        setImages(prev => prev.map(img => 
+          img.id === imageId ? { 
+            ...img, 
+            filteredSuggestions: filtered,
+            showSuggestions: true 
+          } : img
+        ));
+      } else {
+        setImages(prev => prev.map(img => 
+          img.id === imageId ? { 
+            ...img, 
+            filteredSuggestions: [],
+            showSuggestions: false 
+          } : img
+        ));
+      }
+    }, 300);
+  }, []);
 
   // 인증 체크 함수
   const checkAuthAndRedirect = (response: Response) => {
@@ -215,25 +255,27 @@ export default function IngredientPage() {
       setAnalyzingProgress({ current: 0, total: imagesToAnalyze.length });
       console.log(`🚀 총 ${imagesToAnalyze.length}개 이미지 분석 시작`);
 
-      // 모든 이미지를 병렬로 분석 (Promise.all)
-      const analysisPromises = imagesToAnalyze.map(async (img, index) => {
+      // 순차 분석 (진행률 정확도)
+      const results = [];
+      
+      for (let index = 0; index < imagesToAnalyze.length; index++) {
+        const img = imagesToAnalyze[index];
+        
         try {
           console.log(`🔍 [${index + 1}/${imagesToAnalyze.length}] 이미지 분석 중: ${img.id}`);
           
-          // FormData로 이미지 전송
           const formData = new FormData();
           formData.append('file', img.file!);
           
-          // 백엔드 API 호출 (Roboflow + GPT Vision)
           const response = await fetch(`${apiEndpoint}/api/v1/ingredients/analyze-with-roboflow-gpt`, {
             method: 'POST',
             body: formData,
             credentials: 'include',
           });
 
-          // 인증 체크
           if (checkAuthAndRedirect(response)) {
-            return null;
+            results.push(null);
+            continue;
           }
 
           if (!response.ok) {
@@ -243,50 +285,47 @@ export default function IngredientPage() {
           const result = await response.json();
           console.log(`📦 [${index + 1}/${imagesToAnalyze.length}] 분석 결과:`, result);
 
-          // 진행률 업데이트
-          setAnalyzingProgress(prev => ({ ...prev, current: prev.current + 1 }));
-
-          // 결과를 우리 형식으로 변환
-          const ingredientMap = new Map<string, { count: number; confidence: number }>();
+          // 결과를 우리 형식으로 변환 (중복 제거)
+          const ingredientSet = new Set<string>();
+          const ingredientList: IngredientPrediction[] = [];
           
           if (result.success && result.data.ingredients) {
             result.data.ingredients.forEach((ingredient: { name?: string; confidence?: number }) => {
               const name = ingredient.name || '알 수 없음';
               const confidence = ingredient.confidence || 0;
               
-              if (ingredientMap.has(name)) {
-                const existing = ingredientMap.get(name)!;
-                ingredientMap.set(name, {
-                  count: existing.count + 1,
-                  confidence: Math.max(existing.confidence, confidence)
+              if (!ingredientSet.has(name)) {
+                ingredientSet.add(name);
+                ingredientList.push({
+                  name,
+                  selected: true,
+                  confidence
                 });
-              } else {
-                ingredientMap.set(name, { count: 1, confidence });
               }
             });
           }
 
-          // Map을 배열로 변환
-          const ingredientPredictions: IngredientPrediction[] = Array.from(ingredientMap.entries())
-            .map(([name, data]) => ({
-              name,
-              count: data.count,
-              selected: true,
-              confidence: data.confidence
-            }))
-            .sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+          // confidence로 정렬
+          const ingredientPredictions = ingredientList.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
-          return { id: img.id, predictions: ingredientPredictions };
+          results.push({ id: img.id, predictions: ingredientPredictions });
+          
+          // 진행률 업데이트 (분석 완료 후)
+          setAnalyzingProgress({ current: index + 1, total: imagesToAnalyze.length });
+          console.log(`✅ [${index + 1}/${imagesToAnalyze.length}] 이미지 분석 완료!`);
+          
+          // 각 이미지 완료 시 짧은 지연 (UI 업데이트 보장)
+          await new Promise(resolve => setTimeout(resolve, 500));
         } catch (error) {
           console.error(`❌ 이미지 분석 실패 (${img.id}):`, error);
-          // 진행률 업데이트 (실패해도 카운트)
-          setAnalyzingProgress(prev => ({ ...prev, current: prev.current + 1 }));
-          return { id: img.id, predictions: [] };
+          results.push({ id: img.id, predictions: [] });
+          
+          // 실패해도 진행률 업데이트
+          setAnalyzingProgress({ current: index + 1, total: imagesToAnalyze.length });
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
-      });
-
-      // 모든 분석 완료 대기
-      const results = await Promise.all(analysisPromises);
+      }
+      
       console.log(`✅ 모든 분석 완료! 총 ${results.length}개 결과`);
 
       // 한 번에 모든 결과 업데이트
@@ -300,6 +339,9 @@ export default function IngredientPage() {
         })
       );
 
+      // 짧은 지연 후 완료 메시지 (마지막 진행률 표시 보장)
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
       alert(`✅ ${results.length}개 이미지 분석 완료!`);
       clearInterval(messageInterval);
       setLoadingMessage('');
@@ -330,36 +372,24 @@ export default function IngredientPage() {
     );
   };
 
-  const updateCount = (imageId: string, ingredientName: string, delta: number) => {
-    setImages((prev) =>
-      prev.map((img) => {
-        if (img.id !== imageId) return img;
-        return {
-          ...img,
-          predictions: img.predictions?.map((pred) =>
-            pred.name === ingredientName
-              ? { ...pred, count: Math.max(0, pred.count + delta) }
-              : pred
-          ),
-        };
-      })
-    );
-  };
+  // updateCount 제거됨 (count 필드 사용 안함)
 
   const removeImage = (imageId: string) => {
     setImages((prev) => prev.filter((img) => img.id !== imageId));
   };
 
   const handleSaveIngredients = async () => {
-    // 선택된 식재료들만 추출
+    // 선택된 식재료만 추출 (중복 제거)
+    const ingredientSet = new Set<string>();
     const selectedIngredients: { name: string; count: number }[] = [];
     
     images.forEach((img) => {
       img.predictions?.forEach((pred) => {
-        if (pred.selected && pred.count > 0) {
+        if (pred.selected && !ingredientSet.has(pred.name)) {
+          ingredientSet.add(pred.name);
           selectedIngredients.push({
             name: pred.name,
-            count: pred.count,
+            count: 1  // 백엔드가 count를 관리
           });
         }
       });
@@ -381,7 +411,6 @@ export default function IngredientPage() {
         body: JSON.stringify({ ingredients: selectedIngredients }),
       });
 
-      // 인증 체크
       if (checkAuthAndRedirect(response)) {
         return;
       }
@@ -393,7 +422,6 @@ export default function IngredientPage() {
       await response.json();
       alert(`✅ ${selectedIngredients.length}개의 식재료가 저장되었습니다!`);
       
-      // 저장 후 초기화
       setImages([]);
     } catch (error) {
       console.error('❌ 식재료 저장 오류:', error);
@@ -454,12 +482,124 @@ export default function IngredientPage() {
       setIsLoadingRecommendations(false);
     }
   };
+
+  const handleCookingCompletion = async () => {
+    if (!selectedFood) return;
+
+    const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+    try {
+      const ingredientsResponse = await fetch(`${apiEndpoint}/api/v1/ingredients/my-ingredients`, {
+        credentials: 'include',
+      });
+
+      console.log('🌐 API 응답 상태:', ingredientsResponse.status);
+
+      if (checkAuthAndRedirect(ingredientsResponse)) {
+        return;
+      }
+
+      const ingredientsResult = await ingredientsResponse.json();
+      console.log('📦 API 전체 응답:', ingredientsResult);
+
+      const userIngredients: UserIngredientRecord[] = Array.isArray(ingredientsResult.data)
+        ? ingredientsResult.data
+        : [];
+
+      console.log('='.repeat(60));
+      console.log('🔍 DB에서 조회한 사용자 식재료 (총 ' + userIngredients.length + '개):');
+      userIngredients.forEach((ing, idx) => {
+        console.log(`  ${idx + 1}. "${ing.ingredient_name}" - is_used: ${ing.is_used}`);
+      });
+      console.log('📋 레시피 필요 재료:', selectedFood.ingredients);
+      console.log('='.repeat(60));
+
+      const ingredientsData = selectedFood.ingredients.map((ingredientName, index) => {
+        console.log(`\n[재료 ${index + 1}/${selectedFood.ingredients.length}] "${ingredientName}" 매칭 시작...`);
+
+        const found = userIngredients.find((ing) => {
+          const dbName = ing.ingredient_name.toLowerCase().trim();
+          const recipeName = ingredientName.toLowerCase().trim();
+
+          console.log(`  🔎 비교: DB "${dbName}" vs 레시피 "${recipeName}"`);
+
+          if (dbName === recipeName) {
+            console.log('    ✅ 정확히 일치!');
+            return true;
+          }
+
+          if (dbName.length >= 2 && recipeName.length >= 2) {
+            if (dbName.includes(recipeName)) {
+              console.log(`    ✅ DB가 레시피 포함 (${dbName} includes ${recipeName})`);
+              return true;
+            }
+            if (recipeName.includes(dbName)) {
+              console.log(`    ✅ 레시피가 DB 포함 (${recipeName} includes ${dbName})`);
+              return true;
+            }
+          }
+
+          return false;
+        });
+
+        if (found) {
+          console.log(`  ✅ 매칭 성공: "${found.ingredient_name}", is_used: ${found.is_used}`);
+        } else {
+          console.log('  ❌ 매칭 실패: DB에 없음');
+        }
+
+        const isAvailable = found && !found.is_used ? 1 : 0;
+        console.log(`  📊 냉장고 보유 여부: ${isAvailable ? '있음' : '없음'}`);
+
+        return {
+          name: ingredientName,
+          quantity: 1,
+          available: isAvailable,
+        };
+      });
+
+      console.log('\n' + '='.repeat(60));
+      console.log('✅ 최종 재료 보유 데이터:');
+      ingredientsData.forEach((item, idx) => {
+        console.log(`  ${idx + 1}. "${item.name}" - 냉장고 보유: ${item.available ? '있음' : '없음'}`);
+      });
+      console.log('='.repeat(60));
+
+      setIngredientsWithQuantity(ingredientsData);
+      
+      // 체크박스 초기화 (냉장고에 있는 재료만 체크 가능)
+      const initialChecks: {[key: string]: boolean} = {};
+      ingredientsData.forEach(ing => {
+        initialChecks[ing.name] = ing.available > 0;  // 냉장고에 있으면 true
+      });
+      setIngredientChecks(initialChecks);
+      
+      setShowIngredientModal(true);
+    } catch (error) {
+      console.error('❌ 재료 조회 오류:', error);
+      alert('재료 정보를 불러오는데 실패했습니다.');
+    }
+  };
   
   // GPT 추천 텍스트를 파싱해서 음식 목록으로 변환
   const parseRecommendations = (text: string): RecommendedFood[] => {
     try {
-      // JSON 형식으로 파싱
-      const parsed = JSON.parse(text);
+      // 마크다운 코드블록 제거 (```json ... ``` 또는 ``` ... ```)
+      let cleanedText = text.trim();
+      
+      // ```json으로 시작하는 경우
+      if (cleanedText.startsWith('```json')) {
+        cleanedText = cleanedText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+      } 
+      // ```로 시작하는 경우
+      else if (cleanedText.startsWith('```')) {
+        cleanedText = cleanedText.replace(/^```\s*/, '').replace(/```\s*$/, '');
+      }
+      
+      cleanedText = cleanedText.trim();
+      
+      // JSON 파싱
+      const parsed = JSON.parse(cleanedText);
       
       if (parsed.foods && Array.isArray(parsed.foods)) {
         return parsed.foods.map((food: RecommendedFoodPayload) => ({
@@ -470,50 +610,21 @@ export default function IngredientPage() {
         }));
       }
       
-      // JSON 형식이 아니면 빈 배열 반환
-      console.warn('⚠️ JSON 형식이 아닌 응답:', text);
+      console.warn('⚠️ foods 배열 없음:', parsed);
       return [];
     } catch (error) {
       console.error('❌ 추천 파싱 오류:', error);
-      console.log('원본 텍스트:', text);
+      console.log('원본 텍스트:', text.substring(0, 200));
       
-      // 파싱 실패 시 더미 데이터 반환 (개발 중에만)
       return [
         {
           name: "추천 불러오기 실패",
-          description: "응답 형식을 파싱할 수 없습니다. 백엔드 로그를 확인해주세요.",
+          description: "응답 형식을 파싱할 수 없습니다.",
           ingredients: [],
           steps: ["백엔드 서버를 확인하세요"]
         }
       ];
     }
-  };
-
-  // 수동 입력 핸들러 (이미지별)
-  const handleManualInputChange = (imageId: string, value: string) => {
-    setImages(prev => prev.map(img => {
-      if (img.id !== imageId) return img;
-
-      if (value.trim()) {
-        const filtered = KOREAN_INGREDIENTS.filter(ingredient =>
-          ingredient.toLowerCase().includes(value.toLowerCase())
-        ).slice(0, 10);
-
-        return {
-          ...img,
-          manualInput: value,
-          filteredSuggestions: filtered,
-          showSuggestions: true
-        };
-      } else {
-        return {
-          ...img,
-          manualInput: value,
-          filteredSuggestions: [],
-          showSuggestions: false
-        };
-      }
-    }));
   };
 
   // 수동으로 재료 추가 (특정 이미지에)
@@ -524,12 +635,9 @@ export default function IngredientPage() {
       const existingPred = img.predictions?.find(p => p.name === ingredientName);
       
       if (existingPred) {
-        // 이미 있으면 수량만 증가
+        // 이미 있으면 무시 (중복 방지)
         return {
           ...img,
-          predictions: img.predictions?.map(p => 
-            p.name === ingredientName ? { ...p, count: p.count + 1 } : p
-          ),
           manualInput: '',
           filteredSuggestions: [],
           showSuggestions: false
@@ -540,7 +648,7 @@ export default function IngredientPage() {
           ...img,
           predictions: [
             ...(img.predictions || []),
-            { name: ingredientName, count: 1, selected: true, confidence: 1.0 }
+            { name: ingredientName, selected: true, confidence: 1.0 }
           ],
           manualInput: '',
           filteredSuggestions: [],
@@ -692,46 +800,32 @@ export default function IngredientPage() {
                             {img.predictions.map((pred) => (
                               <div
                                 key={pred.name}
-                                className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                                className={`p-5 rounded-xl border-2 transition-all duration-200 ${
                                   pred.selected
                                     ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-400 shadow-sm'
                                     : 'bg-slate-50 border-slate-200 opacity-60'
                                 }`}
                               >
-                                <div className="flex items-center justify-between mb-3">
-                                  <span className="font-semibold text-slate-800 text-lg">{pred.name}</span>
+                                <div className="flex items-center gap-4">
                                   <button
                                     onClick={() => toggleIngredient(img.id, pred.name)}
-                                    className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 ${
+                                    className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all active:scale-95 flex-shrink-0 ${
                                       pred.selected
                                         ? 'bg-green-500 border-green-600 shadow-sm'
                                         : 'bg-white border-slate-300 hover:border-slate-400'
                                     }`}
                                   >
-                                    {pred.selected && <span className="text-white text-sm font-bold">✓</span>}
+                                    {pred.selected && <span className="text-white text-base font-bold">✓</span>}
                                   </button>
-                                </div>
-
-                                {pred.selected && (
-                                  <div className="flex items-center gap-3 bg-white/70 rounded-lg p-3">
-                                    <span className="text-sm font-medium text-slate-600">수량:</span>
-                                    <button
-                                      onClick={() => updateCount(img.id, pred.name, -1)}
-                                      className="w-9 h-9 bg-slate-200 rounded-xl hover:bg-slate-300 active:scale-95 transition-all font-bold text-slate-700"
-                                    >
-                                      −
-                                    </button>
-                                    <span className="w-14 text-center font-bold text-slate-800 text-lg">
-                                      {pred.count}
+                                  
+                                  <span className="font-bold text-slate-800 text-2xl flex-1">{pred.name}</span>
+                                  
+                                  {pred.confidence && (
+                                    <span className="text-xs text-slate-500 px-2 py-1 bg-white/70 rounded">
+                                      {Math.round(pred.confidence * 100)}%
                                     </span>
-                                    <button
-                                      onClick={() => updateCount(img.id, pred.name, 1)}
-                                      className="w-9 h-9 bg-slate-200 rounded-xl hover:bg-slate-300 active:scale-95 transition-all font-bold text-slate-700"
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                )}
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -1075,8 +1169,8 @@ export default function IngredientPage() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl max-w-md w-full p-6">
               <h3 className="text-xl font-bold mb-4">사용한 재료 확인</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                실제 사용한 재료의 수량을 확인하고 조정해주세요.
+              <p className="text-sm text-gray-700 mb-6 bg-purple-50 p-3 rounded-lg">
+                💡 <strong>체크한 재료는 식재료에서 삭제되며 추후 추천 재료에서 제외됩니다</strong>
               </p>
               
               {/* 식사 유형 선택 */}
@@ -1129,42 +1223,39 @@ export default function IngredientPage() {
               </div>
 
               <div className="space-y-3 mb-6 max-h-96 overflow-y-auto">
-                {ingredientsWithQuantity.map((ingredient, index) => (
-                  <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                    <div className="flex-1">
-                      <div className="font-medium">{ingredient.name}</div>
-                      <div className="text-xs text-gray-500">보유: {ingredient.available}개</div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          const newList = [...ingredientsWithQuantity];
-                          if (newList[index].quantity > 0) {
-                            newList[index].quantity -= 1;
-                            setIngredientsWithQuantity(newList);
-                          }
-                        }}
-                        className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center hover:bg-gray-300"
-                      >
-                        -
-                      </button>
+                {ingredientsWithQuantity.map((ingredient, index) => {
+                  const isAvailable = ingredient.available > 0;
+                  return (
+                    <div key={index} className={`flex items-center gap-3 p-4 rounded-lg ${isAvailable ? 'bg-gray-50' : 'bg-red-50'}`}>
+                      {/* 체크박스: 냉장고에 있을 때만 활성화 */}
+                      <input 
+                        type="checkbox"
+                        checked={ingredientChecks[ingredient.name] ?? isAvailable}
+                        onChange={(e) => setIngredientChecks(prev => ({
+                          ...prev,
+                          [ingredient.name]: e.target.checked
+                        }))}
+                        disabled={!isAvailable}
+                        className={`w-5 h-5 rounded focus:ring-2 ${
+                          isAvailable 
+                            ? 'text-green-500 focus:ring-green-400' 
+                            : 'text-gray-300 cursor-not-allowed'
+                        }`}
+                      />
                       
-                      <span className="w-12 text-center font-bold">{ingredient.quantity}</span>
-                      
-                      <button
-                        onClick={() => {
-                          const newList = [...ingredientsWithQuantity];
-                          newList[index].quantity += 1;
-                          setIngredientsWithQuantity(newList);
-                        }}
-                        className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center hover:bg-green-600"
-                      >
-                        +
-                      </button>
+                      <div className="flex-1">
+                        <div className="font-semibold text-base mb-2">{ingredient.name}</div>
+                        <div className="text-xs leading-relaxed">
+                          {!isAvailable 
+                            ? '🚫 현재 재료는 냉장고에 없어요!' 
+                            : ingredientChecks[ingredient.name] !== false 
+                              ? '👋 맛있는 요리로 변신 완료! 이제 냉장고에서 졸업할게요~' 
+                              : '💪 아직 팔팔해요! 다음 레시피에서도 저를 불러주세요!'}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               
               <div className="flex gap-3">
@@ -1176,7 +1267,16 @@ export default function IngredientPage() {
                 </button>
                 <button
                   onClick={async () => {
-                    // 실제 저장 함수 호출
+                    // 체크된 재료만 저장
+                    const checkedIngredients = ingredientsWithQuantity.filter(
+                      ing => ingredientChecks[ing.name] !== false
+                    );
+                    
+                    if (checkedIngredients.length === 0) {
+                      alert('최소 1개 이상의 재료를 선택해주세요.');
+                      return;
+                    }
+                    
                     try {
                       const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
                       const response = await fetch(`${apiEndpoint}/api/v1/meals/save-recommended`, {
@@ -1185,12 +1285,12 @@ export default function IngredientPage() {
                         credentials: 'include',
                         body: JSON.stringify({
                           food_name: selectedFood.name,
-                          ingredients_used: selectedFood.ingredients, // 레거시 지원
-                          ingredients_with_quantity: ingredientsWithQuantity.map(ing => ({
+                          ingredients_used: selectedFood.ingredients,
+                          ingredients_with_quantity: checkedIngredients.map(ing => ({
                             name: ing.name,
                             quantity: ing.quantity
                           })),
-                          meal_type: selectedMealType || 'lunch',  // ✨ 사용자가 선택한 식사 유형 사용
+                          meal_type: selectedMealType || 'lunch',
                           portion_size_g: 300.0,
                           memo: `${selectedFood.name} 조리 완료`
                         }),
@@ -1229,92 +1329,3 @@ export default function IngredientPage() {
     </div>
   );
 }
-  const handleCookingCompletion = async () => {
-    if (!selectedFood) return;
-
-    const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-    try {
-      const ingredientsResponse = await fetch(`${apiEndpoint}/api/v1/ingredients/my-ingredients`, {
-        credentials: 'include',
-      });
-
-      console.log('🌐 API 응답 상태:', ingredientsResponse.status);
-
-      if (checkAuthAndRedirect(ingredientsResponse)) {
-        return;
-      }
-
-      const ingredientsResult = await ingredientsResponse.json();
-      console.log('📦 API 전체 응답:', ingredientsResult);
-
-      const userIngredients: UserIngredientRecord[] = Array.isArray(ingredientsResult.data)
-        ? ingredientsResult.data
-        : [];
-
-      console.log('='.repeat(60));
-      console.log('🔍 DB에서 조회한 사용자 식재료 (총 ' + userIngredients.length + '개):');
-      userIngredients.forEach((ing, idx) => {
-        console.log(`  ${idx + 1}. "${ing.ingredient_name}" - 수량: ${ing.count}, is_used: ${ing.is_used}`);
-      });
-      console.log('📋 레시피 필요 재료:', selectedFood.ingredients);
-      console.log('='.repeat(60));
-
-      const ingredientsData = selectedFood.ingredients.map((ingredientName, index) => {
-        console.log(`\n[재료 ${index + 1}/${selectedFood.ingredients.length}] "${ingredientName}" 매칭 시작...`);
-
-        const found = userIngredients.find((ing) => {
-          const dbName = ing.ingredient_name.toLowerCase().trim();
-          const recipeName = ingredientName.toLowerCase().trim();
-
-          console.log(`  🔎 비교: DB "${dbName}" vs 레시피 "${recipeName}"`);
-
-          if (dbName === recipeName) {
-            console.log('    ✅ 정확히 일치!');
-            return true;
-          }
-
-          if (dbName.length >= 2 && recipeName.length >= 2) {
-            if (dbName.includes(recipeName)) {
-              console.log(`    ✅ DB가 레시피 포함 (${dbName} includes ${recipeName})`);
-              return true;
-            }
-            if (recipeName.includes(dbName)) {
-              console.log(`    ✅ 레시피가 DB 포함 (${recipeName} includes ${dbName})`);
-              return true;
-            }
-          }
-
-          return false;
-        });
-
-        if (found) {
-          console.log(`  ✅ 매칭 성공: "${found.ingredient_name}", 수량: ${found.count}, is_used: ${found.is_used}`);
-        } else {
-          console.log('  ❌ 매칭 실패: DB에 없음');
-        }
-
-        const availableCount = found && !found.is_used ? found.count : 0;
-        console.log(`  📊 최종 보유 수량: ${availableCount}개`);
-
-        return {
-          name: ingredientName,
-          quantity: 1,
-          available: availableCount,
-        };
-      });
-
-      console.log('\n' + '='.repeat(60));
-      console.log('✅ 최종 재료 수량 데이터:');
-      ingredientsData.forEach((item, idx) => {
-        console.log(`  ${idx + 1}. "${item.name}" - 사용량: ${item.quantity}, 보유: ${item.available}개`);
-      });
-      console.log('='.repeat(60));
-
-      setIngredientsWithQuantity(ingredientsData);
-      setShowIngredientModal(true);
-    } catch (error) {
-      console.error('❌ 재료 조회 오류:', error);
-      alert('재료 정보를 불러오는데 실패했습니다.');
-    }
-  };
