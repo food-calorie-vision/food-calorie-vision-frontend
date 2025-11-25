@@ -751,8 +751,6 @@ export default function RecommendPage() {
         setCurrentStepIndex(-1);
         setCookingComplete(false);
         setIngredientChecklistRecipe(null);
-        setIngredientChecklistItems([]);
-        setIngredientChecklistState({});
         setFlowStep("cooking");
         setMessages((prev) => [
           ...prev,
@@ -808,18 +806,7 @@ export default function RecommendPage() {
   // 조리 완료
   const finishCooking = () => {
     if (!recipeDetail) return;
-    
-    let completeMessage = `🎉 "${recipeDetail.recipe_name}" 조리 완료!\n\n`;
-    completeMessage += `축하합니다! 맛있는 요리가 완성되었습니다.\n\n`;
-    completeMessage += `📊 영양 정보:\n`;
-    completeMessage += `  • 칼로리: ${recipeDetail.nutrition_info.calories}kcal\n`;
-    completeMessage += `  • 단백질: ${recipeDetail.nutrition_info.protein}\n`;
-    completeMessage += `  • 탄수화물: ${recipeDetail.nutrition_info.carbs}\n`;
-    completeMessage += `  • 지방: ${recipeDetail.nutrition_info.fat}\n\n`;
-    completeMessage += `💡 아래 버튼을 눌러 식단에 기록하세요!`;
-    
-    setMessages((prev) => [...prev, { role: "bot", text: completeMessage }]);
-    setCookingComplete(true);
+    setFlowStep("complete");
   };
 
   // 조리 종료
@@ -1589,15 +1576,59 @@ export default function RecommendPage() {
                   <p className="text-sm text-slate-600">{recipeIntro}</p>
                 </div>
 
-                {cookingMarkdown && (
-                  <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-800">
-                    <div className="text-xs font-semibold text-slate-500 mb-2">재료 변경 사항</div>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-sm max-w-none">
-                      {cookingMarkdown}
-                    </ReactMarkdown>
-                  </div>
-                )}
+                {/* Recipe Adjusted Banner */}
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+                  <p className="text-sm text-blue-800 font-semibold">
+                    선택하신 재료에 맞게 레시피가 조정되었어요!
+                  </p>
+                </div>
 
+                {/* Ingredients & Notes Section */}
+                <div className="bg-white rounded-xl border-2 border-slate-200 shadow-sm p-4">
+                  <h2 className="text-base font-bold text-slate-900 mb-3 border-b pb-2">
+                    📋 재료 및 주요 변경사항
+                  </h2>
+                  
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-2">재료 목록</h3>
+                    <ul className="space-y-1.5 text-sm pl-2">
+                      {ingredientChecklistItems.map((ingredient) => {
+                        const hasIngredient = ingredientChecklistState[ingredient] ?? true;
+                        const detail = recipeDetail?.ingredients.find(d => d.name === ingredient);
+                        return (
+                          <li key={ingredient} className={`flex items-center gap-2 ${!hasIngredient ? 'text-slate-400' : 'text-slate-700'}`}>
+                            <span className={`font-medium ${!hasIngredient ? 'line-through' : ''}`}>
+                              {ingredient}
+                            </span>
+                            {detail?.amount && <span className="text-xs text-slate-500">({detail.amount})</span>}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+
+                  {(() => {
+                    const allTips = cookingSteps
+                      .map(step => step.tip)
+                      .filter(tip => tip && tip.trim() !== '');
+                      
+                    if (allTips.length > 0) {
+                      return (
+                        <div className="border-t border-slate-100 pt-3">
+                          <h3 className="text-sm font-semibold text-slate-800 mb-2">셰프의 Tip & 변경사항</h3>
+                          <ul className="space-y-1 text-xs text-green-700 list-disc pl-5">
+                            {allTips.map((tip, index) => (
+                              <li key={index}>{tip}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+
+                {/* Cooking Steps Section */}
                 <div className="bg-white rounded-xl border-2 border-green-500 shadow-lg p-6">
                   <div className="text-center mb-4">
                     {currentStepIndex >= 0 ? (
@@ -1619,13 +1650,18 @@ export default function RecommendPage() {
                           {cookingSteps[currentStepIndex]?.description}
                         </p>
                         {cookingSteps[currentStepIndex]?.tip && (
-                          <p className="text-xs text-green-600 whitespace-pre-line">
+                          <p className="text-xs text-green-600 whitespace-pre-line pt-2">
                             💡 {cookingSteps[currentStepIndex]?.tip}
                           </p>
                         )}
                       </div>
                     ) : (
-                      <p className="text-sm text-slate-500">아래 버튼을 눌러 조리를 시작하세요.</p>
+                      <button
+                        onClick={startCooking}
+                        className="w-full max-w-xs mx-auto py-3 bg-green-500 text-white rounded-lg font-bold text-base active:bg-green-600 transition shadow-md"
+                      >
+                        요리 시작하기
+                      </button>
                     )}
                   </div>
 
