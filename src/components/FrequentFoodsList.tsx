@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { CheckSquare } from 'lucide-react';
 import { FrequentFood } from '@/types';
+import { API_BASE_URL } from '@/utils/api';
 
 const FrequentFoodsList = () => {
   const [frequentFoods, setFrequentFoods] = useState<FrequentFood[]>([]);
@@ -11,10 +12,8 @@ const FrequentFoodsList = () => {
   useEffect(() => {
     const fetchFrequentFoods = async () => {
       try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        
         // 대시보드 통계에서 자주 먹는 음식 가져오기
-        const response = await fetch(`${apiEndpoint}/api/v1/meals/dashboard-stats`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/meals/dashboard-stats`, {
           method: 'GET',
           credentials: 'include', // 세션 쿠키 포함
         });

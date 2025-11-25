@@ -9,6 +9,7 @@ import DailyCalorieChart from '@/components/DailyCalorieChart';
 import FrequentFoodsList from '@/components/FrequentFoodsList';
 import FloatingActionButtons from '@/components/FloatingActionButtons';
 import { useSession } from '@/contexts/SessionContext';
+import { API_BASE_URL } from '@/utils/api';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function Dashboard() {
       if (!isAuthenticated) return;
       
       try {
-        const response = await fetch('http://localhost:8000/api/v1/auth/me', {
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
           method: 'GET',
           credentials: 'include', // 세션 쿠키 포함
         });
