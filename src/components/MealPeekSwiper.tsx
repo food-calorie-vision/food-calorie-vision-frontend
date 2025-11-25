@@ -168,7 +168,7 @@ export default function MealPeekSwiper({
         <div>오늘의 식사일기 · {wrap(index, images.length) + 1} / {images.length}</div>
       </div>
 
-      <div className="relative h-[500px] select-none">
+      <div className={`relative select-none ${current?.predictions ? 'h-[650px]' : 'h-[350px]'}`}>
         {/* 뒤 카드 peek - 다중 이미지일 때만 표시 */}
         {images.length > 1 && (
           <div className="absolute inset-0 pointer-events-none">
@@ -244,7 +244,7 @@ export default function MealPeekSwiper({
             </div>
 
             {/* 하단 컨트롤 */}
-            <div className="flex-1 p-4 overflow-y-auto">
+            <div className="flex-1 p-4 flex flex-col">
               {!current.predictions && (
                 <div className="text-sm text-slate-500">
                   분석 결과가 아직 없습니다. 아래의 <b>식단 분석 시작</b> 버튼을 먼저 눌러주세요.
@@ -262,8 +262,8 @@ export default function MealPeekSwiper({
                       <p className="text-xs text-slate-500 mt-1">다른 후보를 선택하려면 아래에서 골라주세요</p>
                     )}
                   </div>
-                  <div className="space-y-2 overflow-y-auto flex-1 pr-1">
-                    {current.predictions.map((pred, idx) => {
+                  <div className="space-y-2 overflow-y-auto flex-1 pr-1 min-h-0">
+                    {current.predictions.slice(0, 3).map((pred, idx) => {
                       const selected = (pickedNameById[current.id] ?? null) === pred.name;
                       const confidencePercent = (pred.confidence * 100).toFixed(0);
                       const getConfidenceColor = (conf: number) => {
@@ -289,7 +289,13 @@ export default function MealPeekSwiper({
                           }`}
                         >
                           <div className="flex items-center gap-2">
-                            {idx === 0 && !selected && <span className="text-green-600 font-bold">1순위</span>}
+                            {!selected && (
+                              <span className={`font-bold ${
+                                idx === 0 ? 'text-green-600' : idx === 1 ? 'text-blue-600' : 'text-purple-600'
+                              }`}>
+                                {idx + 1}순위
+                              </span>
+                            )}
                             <span className={`font-medium text-base ${idx === 0 && !selected ? 'text-green-700' : ''}`}>
                               {pred.name}
                             </span>
@@ -328,13 +334,13 @@ export default function MealPeekSwiper({
               )}
 
               {current.predictions && phase === 'custom_input' && (
-                <div className="flex flex-col h-full">
+                <div className="flex flex-col h-full min-h-0">
                   <div className="flex-shrink-0 mb-3">
                     <p className="text-lg font-bold text-slate-900 mb-1">음식 직접 입력</p>
                     <p className="text-xs text-slate-600">원하는 음식이 목록에 없다면 직접 입력해주세요.</p>
                   </div>
                   
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
                     {/* 음식 이름 입력 */}
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-1.5">

@@ -39,8 +39,8 @@ export default function MealDiaryLayout({ children }: MealDiaryLayoutProps) {
             onClick={() => handleTabClick('meal')}
             className={`flex-1 px-3 py-2.5 rounded-lg transition flex items-center justify-center ${
               activeTab === 'meal'
-                ? 'text-slate-900 font-bold'
-                : 'text-slate-600 font-medium active:bg-slate-50'
+                ? 'bg-green-500 text-white font-bold shadow-md'
+                : 'text-slate-600 font-medium hover:bg-slate-50 active:bg-slate-100'
             }`}
           >
             <span className="text-sm">식단 분석</span>
@@ -49,8 +49,8 @@ export default function MealDiaryLayout({ children }: MealDiaryLayoutProps) {
             onClick={() => handleTabClick('ingredient')}
             className={`flex-1 px-3 py-2.5 rounded-lg transition flex items-center justify-center ${
               activeTab === 'ingredient'
-                ? 'text-slate-900 font-bold'
-                : 'text-slate-600 font-medium active:bg-slate-50'
+                ? 'bg-green-500 text-white font-bold shadow-md'
+                : 'text-slate-600 font-medium hover:bg-slate-50 active:bg-slate-100'
             }`}
           >
             <span className="text-sm">식재료 입력</span>
