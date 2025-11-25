@@ -216,15 +216,8 @@ const buildStepsFromMarkdown = (markdown?: string | null): CookingStep[] => {
 export default function RecommendPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-<<<<<<< HEAD
-  const { isAuthenticated, userName, logout } = useSession();
-=======
+  const { isAuthenticated, userName, logout, isCheckingAuth } = useSession();
   const apiEndpoint = API_BASE_URL;
-  
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("");
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
->>>>>>> origin/main
 
   // URL params에서 tab 읽기 (기본값: recipe)
   const currentTab = (searchParams?.get("tab") || "recipe") as "recipe" | "diet";
@@ -316,42 +309,7 @@ export default function RecommendPage() {
   const [modalMessage, setModalMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-<<<<<<< HEAD
-=======
-  // 로그인 상태 확인 (페이지 로드 시 한 번만)
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-            credentials: 'include',
-        });
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user_id) {
-            setIsLoggedIn(true);
-            setUserName(data.nickname || data.username);
-            setIsCheckingAuth(false);
-          } else {
-            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/');
-          }
-        } else if (response.status === 401 || response.status === 403) {
-          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/');
-        } else {
-          setIsCheckingAuth(false);
-        }
-      } catch (error) {
-        console.error('인증 확인 실패:', error);
-        // 네트워크 에러는 무시
-        setIsCheckingAuth(false);
-      }
-    };
-
-    checkAuth();
-  }, [router, apiEndpoint]);
->>>>>>> origin/main
 
   // 채팅 메시지 자동 스크롤
   useEffect(() => {
