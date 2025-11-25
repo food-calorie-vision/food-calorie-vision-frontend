@@ -1,341 +1,539 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import {
+  Lock,
+  User,
+  Calendar,
+  ChevronLeft,
+  Scale,
+  Ruler,
+  Pill,
+  Activity,
+  AtSign,
+  Mail, // ★ 추가
+} from 'lucide-react';
 import { API_BASE_URL } from '@/utils/api';
 
-// ERDCloud User 테이블 기반 회원가입 폼 데이터
+// 타입
+type Gender = 'M' | 'F' | '';
+type HealthGoal = 'loss' | 'maintain' | 'gain';
+type Step = 1 | 2 | 3;
+
+/** 회원가입 form 데이터 타입 */
 interface SignupFormData {
-  email: string;
   username: string;
   password: string;
+  confirmPassword: string;
+  /** 이메일 */
+  email: string;            
   nickname: string;
-  gender: string;
-  age: string;
+  birthdate: string;
+  gender: Gender;
+
   weight: string;
   height: string;
-  healthGoal: string;
+  healthGoal: HealthGoal;
+  hasAllergy: '' | 'yes' | 'no';
+  allergyTriggers: string;
+
+  comorbidities: string;
+  healthGoalNote: string;
+}
+
+/** 에러 메시지 파서(FastAPI 대응) */
+function extractErrorMessage(data: any): string {
+  try {
+    if (!data) return '회원가입에 실패했습니다.';
+    if (typeof data === 'string') return data;
+    const d = (data as any).detail;
+    if (d !== undefined) {
+      if (typeof d === 'string') return d;
+      if (Array.isArray(d) && d.length > 0) {
+        const x = d[0];
+        if (typeof x === 'string') return x;
+        if (x?.msg) {
+          const loc = x?.loc ? ` (${Array.isArray(x.loc) ? x.loc.join('.') : x.loc})` : '';
+          return `${x.msg}${loc}`;
+        }
+        return JSON.stringify(x);
+      }
+      if (typeof d === 'object' && d !== null) {
+        if ((d as any).msg) return (d as any).msg;
+        return JSON.stringify(d);
+      }
+    }
+    return (data.message || data.error || JSON.stringify(data));
+  } catch {
+    return '회원가입에 실패했습니다.';
+  }
+}
+
+/** 라벨 + 아이콘 박스 */
+function Field({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 focus-within:ring-2 focus-within:ring-emerald-500">
+      <div className="shrink-0 text-slate-400 mt-1">{icon}</div>
+      <div className="w-full">{children}</div>
+    </div>
+  );
+}
+
+/** YYYY/MM/DD or YYYYMMDD → age 계산 */
+function birthToAge(birthStr: string): number | null {
+  const digits = (birthStr || '').replace(/\D/g, '');
+  if (digits.length !== 8) return null;
+
+  const y = Number(digits.slice(0, 4));
+  const m = Number(digits.slice(4, 6));
+  const d = Number(digits.slice(6, 8));
+
+  if (y < 1900 || m < 1 || m > 12 || d < 1 || d > 31) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - y;
+  if (today.getMonth() + 1 < m || (today.getMonth() + 1 === m && today.getDate() < d)) {
+    age -= 1;
+  }
+  return age >= 0 ? age : null;
 }
 
 export default function SignupPage() {
-  const [formData, setFormData] = useState<SignupFormData>({
-    email: '',
+  const [step, setStep] = useState<Step>(1);
+  const [pending, setPending] = useState(false);
+
+  const [f, setF] = useState<SignupFormData>({
     username: '',
     password: '',
+    confirmPassword: '',
+    email: '',                 
     nickname: '',
-    gender: 'M',
-    age: '',
+    birthdate: '',
+    gender: '',
+
     weight: '',
     height: '',
     healthGoal: 'maintain',
+    hasAllergy: '',
+    allergyTriggers: '',
+
+    comorbidities: '',
+    healthGoalNote: '',
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setF((s) => ({ ...s, [name]: value }));
   };
 
-  const handleSubmit = async () => {
-    // 필수 입력 필드 검증
-    if (!formData.email || !formData.username || !formData.password) {
-      alert('이메일, 사용자명, 비밀번호는 필수 입력 사항입니다.');
-      return;
-    }
+  const canNext1 = useMemo(() => {
+    if (!f.username || !f.password || !f.confirmPassword) return false;
+    if (f.username.trim().length < 2) return false;
+    if (f.password.length < 6) return false;
+    if (f.password !== f.confirmPassword) return false;
+    return true;
+  }, [f]);
 
-    if (formData.username.length < 2) {
-      alert('사용자명은 최소 2자 이상이어야 합니다.');
-      return;
-    }
+  /** 빈 값 제거 유틸 */
+  const prune = (obj: Record<string, any>) => {
+    const out: Record<string, any> = {};
+    Object.entries(obj).forEach(([k, v]) => {
+      if (v === '' || v === undefined || v === null) return;
+      if (typeof v === 'string' && v.trim() === '') return;
+      out[k] = v;
+    });
+    return out;
+  };
 
-    if (formData.password.length < 6) {
-      alert('비밀번호는 최소 6자 이상이어야 합니다.');
-      return;
-    }
+  const submit = async () => {
+    if (pending) return;
+    setPending(true);
 
     try {
-      // 백엔드 API에 맞게 데이터 변환
-      const signupData = {
-        email: formData.email,
-        username: formData.username,
-        password: formData.password,
-        nickname: formData.nickname || formData.username, // 닉네임 없으면 username 사용
-        gender: formData.gender || null,
-        age: formData.age ? parseInt(formData.age) : null,
-        weight: formData.weight ? parseFloat(formData.weight) : null,
-        height: formData.height ? parseFloat(formData.height) : null,
-        health_goal: formData.healthGoal,
+      const age = birthToAge(f.birthdate);
+
+      // ▶ 회원가입 API가 받는 필드만 전송
+      const payloadRaw = {
+        username: f.username.trim(),
+        password: f.password,
+        nickname: f.nickname.trim() || f.username.trim(),
+        email: f.email?.trim(),        
+        gender: f.gender || null,
+        age: age ?? null,
+        weight: f.weight ? parseFloat(f.weight) : null,
+        height: f.height ? parseFloat(f.height) : null,
+        health_goal: f.healthGoal,
       };
 
-      console.log('전송할 데이터:', signupData);
-
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(signupData),
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        body: JSON.stringify(prune(payloadRaw)),
       });
 
-      const data = await response.json();
-      console.log('서버 응답:', data);
+      let data: any = null;
+      try { data = await res.json(); } catch { /* 빈 응답 대비 */ }
 
-      if (response.ok && data.success) {
-        alert(`회원가입이 완료되었습니다! (User ID: ${data.user_id})\n로그인 페이지로 이동합니다.`);
+      if (res.ok && (data?.success ?? true)) {
+        alert('회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.');
         window.location.href = '/';
       } else {
-        console.error('회원가입 실패:', data);
-        alert(data.detail || data.message || '회원가입에 실패했습니다.');
+        alert(extractErrorMessage(data));
       }
-    } catch (error) {
-      console.error('회원가입 오류:', error);
+    } catch (e) {
+      console.error(e);
       alert('회원가입 중 오류가 발생했습니다.');
+    } finally {
+      setPending(false);
     }
   };
 
+  /** 단계 UI */
+  const Progress = (
+    <div className="mb-6">
+      <div className="flex items-center justify-center mb-3">
+        <div className="flex w-full max-w-sm items-center gap-2">
+          <div className={`h-2 flex-1 rounded-full ${step >= 1 ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+          <div className={`h-2 flex-1 rounded-full ${step >= 2 ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+          <div className={`h-2 flex-1 rounded-full ${step >= 3 ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+        </div>
+      </div>
+
+      <div className="flex justify-center gap-6 text-xs font-medium text-slate-600">
+        <span className={step === 1 ? 'text-emerald-600 font-semibold' : ''}>기본정보</span>
+        <span className={step === 2 ? 'text-emerald-600 font-semibold' : ''}>체중/알레르기</span>
+        <span className={step === 3 ? 'text-emerald-600 font-semibold' : ''}>기타정보</span>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white py-12">
-      {/* 헤더 */}
-      <div className="max-w-4xl mx-auto px-4 mb-8">
-        <Link href="/" className="inline-flex items-center text-slate-600 hover:text-slate-900 transition">
-          <span className="text-2xl mr-2">←</span>
-          <span className="font-medium">돌아가기</span>
+    <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)]">
+      {/* 상단 */}
+      <div className="max-w-md mx-auto px-4 pt-6">
+        <Link href="/" className="inline-flex items-center text-slate-600 hover:text-slate-900">
+          <ChevronLeft className="w-5 h-5 mr-1" /> 홈으로
         </Link>
       </div>
 
-      {/* 회원가입 폼 */}
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="bg-white rounded-3xl shadow-lg p-8 md:p-12">
-          <h1 className="text-3xl font-bold text-center text-slate-900 mb-8">회원가입</h1>
+      <div className="max-w-md mx-auto px-4 py-6">
+        <div className="rounded-2xl bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] border border-slate-100 p-6">
+          <h1 className="text-2xl font-bold text-center text-slate-900">회원가입</h1>
 
-          <div className="grid md:grid-cols-2 gap-x-12 gap-y-8">
-            {/* 왼쪽 컬럼 */}
-            <div className="space-y-6">
-              {/* 1. 이메일 */}
-              <div>
-                <label className="flex items-center gap-2 text-slate-700 font-semibold mb-2">
-                  <span className="text-red-500 text-lg">1</span>
-                  이메일 (필수)
-                </label>
+          {Progress}
+
+          {/* STEP 1 - 기본정보 */}
+          {step === 1 && (
+            <div className="space-y-5">
+              {/* 아이디 */}
+              <Field icon={<AtSign className="w-5 h-5" />}>
+                <input
+                  name="username"
+                  placeholder="아이디"
+                  value={f.username}
+                  onChange={onChange}
+                  className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
+                />
+              </Field>
+
+              {/* 비밀번호 + 확인 */}
+              <Field icon={<Lock className="w-5 h-5" />}>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 w-full">
+                  <input
+                    type="password"
+                    name="password"
+                    placeholder="비밀번호 (6자 이상)"
+                    value={f.password}
+                    onChange={onChange}
+                    className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
+                  />
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    placeholder="비밀번호 확인"
+                    value={f.confirmPassword}
+                    onChange={onChange}
+                    className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
+                  />
+                </div>
+              </Field>
+
+              {/* 이메일(필수)  */}
+              <Field icon={<Mail className="w-5 h-5" />}>
                 <input
                   type="email"
                   name="email"
-                  placeholder="example@email.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+                  placeholder="이메일 (필수)"
+                  value={f.email}
+                  onChange={onChange}
+                  className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
                 />
-              </div>
+              </Field>
 
-              {/* 2. 사용자명 */}
-              <div>
-                <label className="flex items-center gap-2 text-slate-700 font-semibold mb-2">
-                  <span className="text-red-500 text-lg">2</span>
-                  사용자명 (필수)
-                </label>
+              {/* 닉네임 */}
+              <Field icon={<User className="w-5 h-5" />}>
                 <input
-                  type="text"
-                  name="username"
-                  placeholder="Username"
-                  value={formData.username}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-                />
-              </div>
-
-              {/* 3. 비밀번호 */}
-              <div>
-                <label className="flex items-center gap-2 text-slate-700 font-semibold mb-2">
-                  <span className="text-red-500 text-lg">3</span>
-                  비밀번호 (필수)
-                </label>
-                <input
-                  type="password"
-                  name="password"
-                  placeholder="Password (최소 6자)"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-                />
-              </div>
-
-              {/* 4. 닉네임 */}
-              <div>
-                <label className="flex items-center gap-2 text-slate-700 font-semibold mb-2">
-                  <span className="text-slate-400 text-lg">4</span>
-                  닉네임 (선택)
-                </label>
-                <input
-                  type="text"
                   name="nickname"
-                  placeholder="Nickname (없으면 사용자명 사용)"
-                  value={formData.nickname}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+                  placeholder="닉네임 (선택)"
+                  value={f.nickname}
+                  onChange={onChange}
+                  className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
                 />
+              </Field>
+
+              {/* 생년월일 */}
+              <Field icon={<Calendar className="w-5 h-5" />}>
+                <input
+                  name="birthdate"
+                  placeholder="생년월일 8자리 (YYYY/MM/DD)"
+                  value={f.birthdate}
+                  onChange={onChange}
+                  inputMode="numeric"
+                  className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
+                />
+              </Field>
+
+              {/* 성별 */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { k: 'M' as Gender, t: '남자' },
+                  { k: 'F' as Gender, t: '여자' },
+                  { k: '' as Gender, t: '선택안함' },
+                ].map((g) => (
+                  <button
+                    key={g.k}
+                    type="button"
+                    onClick={() => setF((s) => ({ ...s, gender: g.k }))}
+                    className={`py-3 rounded-xl border text-sm font-medium ${
+                      f.gender === g.k
+                        ? 'border-emerald-600 bg-emerald-500 text-white shadow'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300'
+                    }`}
+                  >
+                    {g.t}
+                  </button>
+                ))}
               </div>
 
-              {/* 5. 성별 */}
-              <div>
-                <label className="flex items-center gap-2 text-slate-700 font-semibold mb-3">
-                  <span className="text-slate-400 text-lg">5</span>
-                  성별 (선택)
-                </label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="gender"
-                      value="M"
-                      checked={formData.gender === 'M'}
-                      onChange={handleChange}
-                      className="w-4 h-4 text-green-500 focus:ring-green-500"
-                    />
-                    <span className="text-slate-700">남자</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="gender"
-                      value="F"
-                      checked={formData.gender === 'F'}
-                      onChange={handleChange}
-                      className="w-4 h-4 text-green-500 focus:ring-green-500"
-                    />
-                    <span className="text-slate-700">여자</span>
-                  </label>
-                </div>
-              </div>
+              {/* 안내문 */}
+              <p className="text-xs leading-5 text-emerald-700 pt-2">
+                신분증 상의 이름, 생년월일, 성별과 일치하지 않으면 실명인증이 불가능합니다.
+              </p>
             </div>
+          )}
 
-            {/* 오른쪽 컬럼 */}
+          {/* STEP 2 - 체중/알레르기 */}
+          {step === 2 && (
             <div className="space-y-6">
-              {/* 6. 나이 */}
+              {/* 신체 정보 */}
               <div>
-                <label className="flex items-center gap-2 text-slate-700 font-semibold mb-2">
-                  <span className="text-slate-400 text-lg">6</span>
-                  나이 (선택)
-                </label>
-                <input
-                  type="number"
-                  name="age"
-                  placeholder="나이 (숫자만)"
-                  value={formData.age}
-                  onChange={handleChange}
-                  min="0"
-                  max="150"
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-                />
+                <div className="mb-2 text-sm font-semibold text-slate-800">신체 정보</div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Field icon={<Scale className="w-5 h-5" />}>
+                    <div className="flex items-center gap-2 w-full">
+                      <input
+                        name="weight"
+                        placeholder="체중"
+                        value={f.weight}
+                        onChange={onChange}
+                        className="w-full bg-slate-50 rounded-md px-3 py-2 outline-none text-base"
+                      />
+                      <span className="text-sm text-slate-500">kg</span>
+                    </div>
+                  </Field>
+
+                  <Field icon={<Ruler className="w-5 h-5" />}>
+                    <div className="flex items-center gap-2 w-full">
+                      <input
+                        name="height"
+                        placeholder="키"
+                        value={f.height}
+                        onChange={onChange}
+                        className="w-full bg-slate-50 rounded-md px-3 py-2 outline-none text-base"
+                      />
+                      <span className="text-sm text-slate-500">cm</span>
+                    </div>
+                  </Field>
+                </div>
               </div>
 
-              {/* 7. 체중 */}
+              {/* 체중 목표 */}
               <div>
-                <label className="flex items-center gap-2 text-slate-700 font-semibold mb-2">
-                  <span className="text-slate-400 text-lg">7</span>
-                  체중 (선택)
-                </label>
-                <input
-                  type="number"
-                  name="weight"
-                  placeholder="체중 (kg)"
-                  value={formData.weight}
-                  onChange={handleChange}
-                  step="0.1"
-                  min="0"
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-                />
-              </div>
-              
-              {/* 8. 키 */}
-              <div>
-                <label className="flex items-center gap-2 text-slate-700 font-semibold mb-2">
-                  <span className="text-slate-400 text-lg">8</span>
-                  키 (선택)
-                </label>
-                <input
-                  type="number"
-                  name="height"
-                  placeholder="키 (cm)"
-                  value={formData.height}
-                  onChange={handleChange}
-                  step="0.1"
-                  min="0"
-                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition"
-                />
+                <div className="mb-2 text-sm font-semibold text-slate-800">체중 목표</div>
+                <div className="flex gap-2">
+                  {[
+                    { v: 'loss' as HealthGoal, t: '감량' },
+                    { v: 'maintain' as HealthGoal, t: '유지' },
+                    { v: 'gain' as HealthGoal, t: '증량' },
+                  ].map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      onClick={() => setF((s) => ({ ...s, healthGoal: o.v }))}
+                      className={`px-4 py-2 rounded-full border text-sm ${
+                        f.healthGoal === o.v
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300'
+                      }`}
+                    >
+                      {o.t}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* 9. 건강 목표 */}
+              {/* 알레르기 유무 */}
               <div>
-                <label className="flex items-center gap-2 text-slate-700 font-semibold mb-3">
-                  <span className="text-red-500 text-lg">9</span>
-                  건강 목표
-                </label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="mb-2 text-sm font-semibold text-slate-800">
+                  식품 알레르기 유무
+                </div>
+
+                <div className="flex items-center gap-6">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
-                      name="healthGoal"
-                      value="loss"
-                      checked={formData.healthGoal === 'loss'}
-                      onChange={handleChange}
-                      className="w-4 h-4 text-green-500 focus:ring-green-500"
+                      name="hasAllergy"
+                      value="yes"
+                      checked={f.hasAllergy === 'yes'}
+                      onChange={onChange}
                     />
-                    <span className="text-slate-700">감량</span>
+                    <span className="text-slate-700 text-sm">있음</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
+
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
-                      name="healthGoal"
-                      value="maintain"
-                      checked={formData.healthGoal === 'maintain'}
-                      onChange={handleChange}
-                      className="w-4 h-4 text-green-500 focus:ring-green-500"
+                      name="hasAllergy"
+                      value="no"
+                      checked={f.hasAllergy === 'no'}
+                      onChange={onChange}
                     />
-                    <span className="text-slate-700">유지</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="healthGoal"
-                      value="gain"
-                      checked={formData.healthGoal === 'gain'}
-                      onChange={handleChange}
-                      className="w-4 h-4 text-green-500 focus:ring-green-500"
-                    />
-                    <span className="text-slate-700">증량</span>
+                    <span className="text-slate-700 text-sm">없음</span>
                   </label>
                 </div>
               </div>
 
-              {/* 안내 메시지 */}
-              {/* <div className="bg-slate-50 p-4 rounded-lg">
-                <p className="text-slate-600 text-sm">
-                  <strong>📝 변경사항:</strong>
-                  <br />
-                  - 이메일 기반 로그인으로 변경되었습니다.
-                  <br />
-                  - 건강 정보는 추후 대시보드에서 입력 가능합니다.
-                  <br />- User ID는 자동 생성됩니다.
-                </p>
-              </div> */}
+              {/* 보유 알레르기 정보 */}
+              <div>
+                <div className="mb-2 text-sm font-semibold text-slate-800">보유 알레르기 정보</div>
+
+                <Field icon={<Pill className="w-5 h-5" />}>
+                  <textarea
+                    name="allergyTriggers"
+                    placeholder={`알레르기 유발 성분을 입력해 주세요.
+
+(쉼표로 구분, 예시 - 새우, 땅콩)`}
+                    value={f.allergyTriggers}
+                    onChange={onChange}
+                    onFocus={() => {
+                      if (f.hasAllergy === '') {
+                        setF((s) => ({ ...s, hasAllergy: 'yes' }));
+                      }
+                    }}
+                    disabled={f.hasAllergy === 'no'}
+                    className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 outline-none placeholder:text-slate-400 text-base min-h-[100px] resize-y"
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3 - 기타정보 */}
+          {step === 3 && (
+            <div className="space-y-6">
+              {/* 기저질환 */}
+              <div>
+                <div className="mb-2 text-sm font-semibold text-slate-800">기저질환 정보</div>
+
+                <Field icon={<Activity className="w-5 h-5" />}>
+                  <textarea
+                    name="comorbidities"
+                    placeholder={`기저질환을 입력해 주세요.
+
+(예시 - 고혈압, 당뇨)`}
+                    value={f.comorbidities}
+                    onChange={onChange}
+                    className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 outline-none placeholder:text-slate-400 text-base min-h-[100px] resize-y"
+                  />
+                </Field>
+              </div>
+
+              {/* 건강 목표 */}
+              <div>
+                <div className="mb-2 text-sm font-semibold text-slate-800">건강목표</div>
+
+                <Field icon={<Activity className="w-5 h-5" />}>
+                  <textarea
+                    name="healthGoalNote"
+                    placeholder={`구체적인 건강 목표를 작성해 주세요.
+
+예시:
+1) 혈압을 120/80으로 낮추고 싶어요
+2) 옆구리살을 줄이고 싶어요`}
+                    value={f.healthGoalNote}
+                    onChange={onChange}
+                    className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 outline-none placeholder:text-slate-400 text-base min-h-[120px] resize-y"
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
+
+          {/* 하단 버튼 */}
+          <div className="sticky bottom-0 -mx-6 mt-6 bg-white/90 backdrop-blur px-6 py-4 border-t">
+            <div className="flex gap-3">
+              {step > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setStep((s) => (s - 1) as Step)}
+                  className="flex-1 rounded-xl border border-slate-200 py-3 font-medium text-slate-700 hover:border-emerald-300"
+                >
+                  이전
+                </button>
+              )}
+
+              {step < 3 && (
+                <button
+                  type="button"
+                  onClick={() => setStep((s) => (s + 1) as Step)}
+                  disabled={step === 1 && !canNext1}
+                  className={`flex-1 rounded-xl py-3 font-bold shadow ${
+                    step === 1 && !canNext1
+                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                      : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                  }`}
+                >
+                  다음
+                </button>
+              )}
+
+              {step === 3 && (
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={pending}
+                  className={`flex-1 rounded-xl py-3 font-bold shadow ${
+                    pending
+                      ? 'bg-emerald-300 text-white cursor-wait'
+                      : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                  }`}
+                >
+                  가입하기
+                </button>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* 회원가입 버튼 */}
-          <div className="mt-12">
-            <button
-              onClick={handleSubmit}
-              className="w-full bg-green-500 text-white py-4 rounded-lg font-bold text-lg hover:bg-green-600 transition shadow-lg"
-            >
-              회원가입
-            </button>
-          </div>
-
-          {/* 로그인 링크 */}
-          <div className="text-center mt-6">
-            <Link href="/" className="text-slate-600 hover:text-slate-900 text-sm">
-              이미 계정이 있으신가요? <span className="text-green-600 font-medium">로그인하기 →</span>
-            </Link>
-          </div>
+        {/* 로그인 링크 */}
+        <div className="text-center mt-4">
+          <Link href="/" className="text-sm text-slate-600 hover:text-slate-900">
+            이미 계정이 있으신가요?{' '}
+            <span className="text-emerald-700 font-semibold">로그인하기 →</span>
+          </Link>
         </div>
       </div>
     </div>
