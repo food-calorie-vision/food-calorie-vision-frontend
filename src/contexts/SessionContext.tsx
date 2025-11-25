@@ -158,8 +158,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // 초기 세션 체크
   useEffect(() => {
     const initCheck = async () => {
-      // 로그인 페이지는 체크 안함
-      if (pathname === '/' || pathname === '/login') {
+      // 로그인/회원가입 페이지는 체크 안함
+      if (pathname === '/' || pathname === '/login' || pathname === '/signup') {
         setIsChecking(false);
         return;
       }
@@ -176,7 +176,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // 10초마다 세션 체크 (테스트용 - 프로덕션에서는 60000으로 변경)
   useEffect(() => {
-    if (pathname === '/' || pathname === '/login') return;
+    if (pathname === '/' || pathname === '/login' || pathname === '/signup') return;
 
     console.log(`⏰ 세션 체크 타이머 시작 (10초마다)`);
 
@@ -197,7 +197,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // 페이지 이동 시 세션 갱신
   useEffect(() => {
-    if (pathname === '/' || pathname === '/login' || !isAuthenticated) return;
+    if (pathname === '/' || pathname === '/login' || pathname === '/signup' || !isAuthenticated) return;
     
     console.log('🔀 페이지 이동 감지 - 세션 갱신:', pathname);
     const doRefresh = async () => {
@@ -210,7 +210,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // 사용자 활동 시 세션 갱신
   useEffect(() => {
-    if (pathname === '/' || pathname === '/login' || !isAuthenticated) return;
+    if (pathname === '/' || pathname === '/login' || pathname === '/signup' || !isAuthenticated) return;
 
     const events = ['click', 'keydown', 'scroll', 'mousemove'];
     let lastRefresh = Date.now();
@@ -240,7 +240,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [pathname, isAuthenticated, refreshSession]);
 
   // 로딩 중
-  if (isChecking && pathname !== '/' && pathname !== '/login') {
+  if (isChecking && pathname !== '/' && pathname !== '/login' && pathname !== '/signup') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex items-center justify-center">
         <div className="text-center">

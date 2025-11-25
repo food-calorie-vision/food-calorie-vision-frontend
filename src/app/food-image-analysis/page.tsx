@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, Search, Image as ImageIcon, X, Loader2 } from 'lucide-react';
 import Header from '@/components/Header';
 import { FoodAnalysisResult } from '@/types';
+import { useSession } from '@/contexts/SessionContext';
 
 export default function FoodImageAnalysisPage() {
   const router = useRouter();
+  const { isAuthenticated, userName, logout } = useSession();
   const [uploadedImage, setUploadedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -17,68 +19,7 @@ export default function FoodImageAnalysisPage() {
   const [mealType, setMealType] = useState('점심'); // 식사 유형
   const [memo, setMemo] = useState(''); // 메모
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  // 인증 체크 (페이지 로드 시 한 번만)
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user_id) {
-            setIsLoggedIn(true);
-            setUserName(data.nickname || data.username);
-            setIsCheckingAuth(false);
-          } else {
-            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/');
-          }
-        } else if (response.status === 401 || response.status === 403) {
-          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/');
-        } else {
-          setIsCheckingAuth(false);
-        }
-      } catch (error) {
-        console.error('인증 확인 실패:', error);
-        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-        router.push('/');
-      }
-    };
-
-    checkAuth();
-  }, [router]);
-
-  // 인증 체크 중이면 로딩 표시
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent mb-4"></div>
-          <p className="text-slate-600 font-medium">로그인 확인 중...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('login_expire');
-      sessionStorage.removeItem('user_name');
-      alert('로그아웃되었습니다.');
-      router.push('/');
-    }
-  };
 
   // 이미지 업로드 처리
   const handleImageUpload = (file: File) => {
@@ -272,7 +213,7 @@ export default function FoodImageAnalysisPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Header isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <Header isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
       
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* 페이지 헤더 */}
