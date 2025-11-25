@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
+import { useSession } from '@/contexts/SessionContext';
 
 type MealRecord = {
   history_id: number;
@@ -317,8 +318,7 @@ const getEncouragementMessage = (meals: MealRecord[]): string | null => {
 
 export default function FoodHistoryPage() {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
+  const { isAuthenticated, userName, logout } = useSession();
   const [loading, setLoading] = useState(true);
   const [meals, setMeals] = useState<MealRecord[]>([]);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -329,40 +329,11 @@ export default function FoodHistoryPage() {
 
   const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  // 로그인 확인
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user_id) {
-            setIsLoggedIn(true);
-            setUserName(data.nickname || data.username);
-          } else {
-            alert('⚠️ 로그인이 필요합니다.');
-            router.push('/');
-          }
-        } else {
-          alert('⚠️ 로그인이 필요합니다.');
-          router.push('/');
-        }
-      } catch (error) {
-        console.error('인증 확인 실패:', error);
-        alert('⚠️ 로그인이 필요합니다.');
-        router.push('/');
-      }
-    };
-
-    checkAuth();
-  }, [router, apiEndpoint]);
-
   // 음식 기록 조회
   useEffect(() => {
     const fetchMeals = async () => {
+      if (!isAuthenticated) return;
+      
       try {
         const response = await fetch(`${apiEndpoint}/api/v1/meals/history?limit=100`, {
           credentials: 'include',
@@ -381,30 +352,8 @@ export default function FoodHistoryPage() {
       }
     };
 
-    if (isLoggedIn) {
-      fetchMeals();
-    }
-  }, [isLoggedIn, apiEndpoint]);
-
-  // 로그아웃
-  const handleLogout = async () => {
-    try {
-      const response = await fetch(`${apiEndpoint}/api/v1/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        setIsLoggedIn(false);
-        setUserName('');
-        sessionStorage.clear();
-        alert('로그아웃되었습니다.');
-        router.push('/');
-      }
-    } catch (error) {
-      console.error('로그아웃 에러:', error);
-    }
-  };
+    fetchMeals();
+  }, [isAuthenticated, apiEndpoint]);
 
   // 음식 기록 삭제
   const handleDelete = async (historyId: number, foodName: string) => {
@@ -451,7 +400,7 @@ export default function FoodHistoryPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
 
       <main className="max-w-md mx-auto px-4 py-6 pb-24">
         {/* 페이지 제목 */}

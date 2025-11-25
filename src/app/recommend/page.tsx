@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import MobileHeader from "@/components/MobileHeader";
 import MobileNav from "@/components/MobileNav";
+import { useSession } from "@/contexts/SessionContext";
 
 type FlowStep = "chat" | "select" | "cooking" | "complete";
 type ChatMessage = { 
@@ -120,10 +121,7 @@ const DUMMY_MEAL_PLANS = [
 export default function RecommendPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("");
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const { isAuthenticated, userName, logout } = useSession();
 
   // URL params에서 tab 읽기 (기본값: recipe)
   const currentTab = (searchParams?.get("tab") || "recipe") as "recipe" | "diet";
@@ -205,40 +203,6 @@ export default function RecommendPage() {
   const [modalMessage, setModalMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // 로그인 상태 확인 (페이지 로드 시 한 번만)
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user_id) {
-            setIsLoggedIn(true);
-            setUserName(data.nickname || data.username);
-            setIsCheckingAuth(false);
-          } else {
-            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/');
-          }
-        } else if (response.status === 401 || response.status === 403) {
-          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/');
-        } else {
-          setIsCheckingAuth(false);
-        }
-      } catch (error) {
-        console.error('인증 확인 실패:', error);
-        // 네트워크 에러는 무시
-        setIsCheckingAuth(false);
-      }
-    };
-
-    checkAuth();
-  }, [router]);
 
   // 채팅 메시지 자동 스크롤
   useEffect(() => {
@@ -263,17 +227,6 @@ export default function RecommendPage() {
     }
   };
 
-  // 로그아웃 처리
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName("");
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("login_expire");
-      sessionStorage.removeItem("user_name");
-      alert("로그아웃되었습니다.");
-      router.push("/");
-    }
-  };
 
   // 식사 유형 선택 처리
   const handleMealTypeSelect = async (mealType: string) => {
@@ -879,7 +832,7 @@ export default function RecommendPage() {
     if (!selectedDietPlan) return;
     
     // 로그인 확인
-    if (!isLoggedIn) {
+    if (!isAuthenticated) {
       setModalMessage('⚠️ 로그인이 필요합니다.');
       setShowModal(true);
       return;
@@ -1063,21 +1016,10 @@ export default function RecommendPage() {
     setSelectedDietPlan(null);
   };
 
-  // 인증 체크 중
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">로그인 확인 중...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
 
       {/* 상단 탭 버튼 - 모바일 최적화 */}
       <section className="max-w-md mx-auto px-4 py-4">
@@ -1868,7 +1810,7 @@ export default function RecommendPage() {
         )}
       </main>
 
-      {isLoggedIn && <MobileNav />}
+      {isAuthenticated && <MobileNav />}
       
       {/* 모달 */}
       {showModal && (

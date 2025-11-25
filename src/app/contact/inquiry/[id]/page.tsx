@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
 import { ArrowLeft, CheckCircle, Clock, MessageSquare } from 'lucide-react';
+import { useSession } from '@/contexts/SessionContext';
 
 type Inquiry = {
   inquiry_id: number;
@@ -24,47 +25,17 @@ export default function InquiryDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id;
+  const { isAuthenticated, userName, logout } = useSession();
   
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('');
   const [inquiry, setInquiry] = useState<Inquiry | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 로그인 상태 확인 (API 기반)
+  // 문의 조회
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user_id) {
-            setIsLoggedIn(true);
-            setUserName(data.nickname || data.username);
-          } else {
-            alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-            router.push('/');
-          }
-        } else if (response.status === 401 || response.status === 403) {
-          alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-          router.push('/');
-        }
-      } catch (error) {
-        console.error('인증 확인 실패:', error);
-        alert('⚠️ 로그인이 필요합니다. 로그인 페이지로 이동합니다.');
-        router.push('/');
-      }
-    };
-
-    checkAuth();
-    
-    if (id) {
+    if (id && isAuthenticated) {
       fetchInquiry();
     }
-  }, [id, router]);
+  }, [id, isAuthenticated]);
 
   const fetchInquiry = async () => {
     try {
@@ -85,16 +56,6 @@ export default function InquiryDetailPage() {
     }
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('login_expire');
-      sessionStorage.removeItem('user_name');
-      alert('로그아웃되었습니다.');
-      router.push('/');
-    }
-  };
 
 
   const formatDate = (dateString: string) => {
@@ -111,7 +72,7 @@ export default function InquiryDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-        <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+        <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
         <div className="max-w-md mx-auto px-4 py-6 pb-24">
           <div className="mb-6 h-4 w-32 bg-slate-200 rounded animate-pulse"></div>
           
@@ -130,7 +91,7 @@ export default function InquiryDetailPage() {
             </div>
           </div>
         </div>
-        {isLoggedIn && <MobileNav />}
+        {isAuthenticated && <MobileNav />}
       </div>
     );
   }
@@ -138,18 +99,18 @@ export default function InquiryDetailPage() {
   if (!inquiry) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-        <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+        <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
         <div className="max-w-md mx-auto px-4 py-20 text-center">
           <p className="text-slate-600">문의를 찾을 수 없습니다.</p>
         </div>
-        {isLoggedIn && <MobileNav />}
+        {isAuthenticated && <MobileNav />}
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white mobile-content">
-      <MobileHeader isLoggedIn={isLoggedIn} userName={userName} handleLogout={handleLogout} />
+      <MobileHeader isLoggedIn={isAuthenticated} userName={userName} handleLogout={logout} />
       
       <div className="max-w-md mx-auto px-4 py-6 pb-24">
         {/* 뒤로가기 */}
@@ -242,7 +203,7 @@ export default function InquiryDetailPage() {
         </Link>
       </div>
 
-      {isLoggedIn && <MobileNav />}
+      {isAuthenticated && <MobileNav />}
     </div>
   );
 }
