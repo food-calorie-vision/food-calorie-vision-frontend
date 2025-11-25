@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Activity } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DailyCalorieData } from '@/types';
+import { API_BASE_URL } from '@/utils/api';
 
 interface DailyCalorieChartProps {
   userInfo?: any; // 사용자 정보
@@ -47,7 +48,7 @@ const DailyCalorieChart = ({ userInfo }: DailyCalorieChartProps) => {
   useEffect(() => {
     const fetchCalorieData = async () => {
       try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const apiEndpoint = API_BASE_URL;
         
         // 대시보드 통계에서 일일 칼로리 데이터 가져오기
         const response = await fetch(`${apiEndpoint}/api/v1/meals/dashboard-stats`, {

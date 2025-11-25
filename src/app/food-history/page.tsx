@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
+import { API_BASE_URL } from '@/utils/api';
 
 type MealRecord = {
   history_id: number;
@@ -327,7 +328,7 @@ export default function FoodHistoryPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [listFilter, setListFilter] = useState<ListFilter>('today');
 
-  const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const apiEndpoint = API_BASE_URL;
 
   // 로그인 확인
   useEffect(() => {

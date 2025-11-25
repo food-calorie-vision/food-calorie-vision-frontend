@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { API_BASE_URL } from '@/utils/api';
 
 // ERDCloud User 테이블 기반 회원가입 폼 데이터
 interface SignupFormData {
@@ -67,7 +68,7 @@ export default function SignupPage() {
 
       console.log('전송할 데이터:', signupData);
 
-      const response = await fetch('http://localhost:8000/api/v1/auth/signup', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

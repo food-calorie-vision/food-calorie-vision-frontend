@@ -8,6 +8,7 @@ import MyScore from '@/components/MyScore';
 import DailyCalorieChart from '@/components/DailyCalorieChart';
 import FrequentFoodsList from '@/components/FrequentFoodsList';
 import FloatingActionButtons from '@/components/FloatingActionButtons';
+import { API_BASE_URL } from '@/utils/api';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function Dashboard() {
     // 백엔드에서 사용자 정보 가져오기 (페이지 로드 시 한 번만)
     const fetchUserInfo = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/auth/me', {
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
           method: 'GET',
           credentials: 'include', // 세션 쿠키 포함
         });
@@ -58,7 +59,7 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/auth/logout', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
         method: 'POST',
         credentials: 'include', // 세션 쿠키 포함
       });

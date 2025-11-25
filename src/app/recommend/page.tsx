@@ -2,16 +2,36 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import MobileHeader from "@/components/MobileHeader";
 import MobileNav from "@/components/MobileNav";
+import { API_BASE_URL } from "@/utils/api";
 
 type FlowStep = "chat" | "select" | "cooking" | "complete";
+type RecipeAgentActionType =
+  | "CONFIRMATION"
+  | "RECOMMENDATION_RESULT"
+  | "TEXT_ONLY"
+  | "INGREDIENT_CHECK"
+  | "COOKING_STEPS";
+
 type ChatMessage = { 
   role: "bot" | "user"; 
   text: string;
   recipeCards?: Recipe[];
   dietCards?: DietPlan[];
   healthWarning?: string;
+  actionType?: RecipeAgentActionType;
+  suggestions?: string[];
+  ingredientCheck?: {
+    recipeName: string;
+    ingredients: string[];
+  };
+  cookingMarkdown?: {
+    recipeName: string;
+    markdown: string;
+  };
 };
 
 type Recipe = {
@@ -20,6 +40,7 @@ type Recipe = {
   calories?: number;
   cooking_time?: string;
   difficulty?: string;
+  suitable_reason?: string;
   // 개별 정보를 저장하기 위한 필드
   fullInfo?: {
     description: string;
@@ -29,8 +50,44 @@ type Recipe = {
   };
 };
 
+type RecipeAgentResponse = {
+  response_id: string;
+  action_type: RecipeAgentActionType;
+  message: string;
+  suggestions?: string[];
+  data?: {
+    recipes?: Recipe[];
+    inferred_preference?: string;
+    health_warning?: string;
+    user_friendly_message?: string;
+  };
+};
+
+type RawDietPlan = {
+  name: string;
+  description: string;
+  totalCalories: string;
+  meals: {
+    breakfast?: string;
+    lunch?: string;
+    dinner?: string;
+    snack?: string;
+  };
+  nutrients?: string;
+  meal_details?: DietPlan["meal_details"];
+};
+
+type DietPlanApiResponse = {
+  dietPlans: RawDietPlan[];
+  bmr?: number;
+  tdee?: number;
+  targetCalories?: number;
+  healthGoal?: string;
+  healthGoalKr?: string;
+};
+
 type CookingStep = {
-  step_number: number;
+  stepNumber: number;
   title: string;
   description: string;
   tip?: string;
@@ -48,6 +105,8 @@ type RecipeDetail = {
     protein: string;
     carbs: string;
     fat: string;
+    fiber?: string;
+    sodium?: string;
   };
 };
 
@@ -95,31 +154,68 @@ const INITIAL_BOT_MESSAGE: ChatMessage = {
     "⚠️ 본 추천은 참고용 조언이며, 전문 영양사나 의사의 의학적 소견이 아닙니다."
 };
 
-// 더미 식단 카드 데이터
-const DUMMY_MEAL_PLANS = [
-  {
-    title: "단백질 위주",
-    desc: "근력운동 후 회복을 위한 저지방 단백질 식단",
-    kcal: "약 450 kcal",
-    badge: "추천 1순위",
-  },
-  {
-    title: "저염 식단",
-    desc: "혈압 관리를 위한 저염 메뉴 구성",
-    kcal: "약 400 kcal",
-    badge: "저염",
-  },
-  {
-    title: "균형형 3대 영양소",
-    desc: "탄수화물 / 단백질 / 지방을 고르게 맞춘 일반 식단",
-    kcal: "약 500 kcal",
-    badge: "균형",
-  },
-];
+const detectMealTypeFromText = (text: string): string | null => {
+  const normalized = text.replace(/\s+/g, "").toLowerCase();
+  const map: Record<string, string> = {
+    breakfast: "breakfast",
+    아침: "breakfast",
+    모닝: "breakfast",
+    점심: "lunch",
+    런치: "lunch",
+    lunch: "lunch",
+    저녁: "dinner",
+    디너: "dinner",
+    dinner: "dinner",
+    간식: "snack",
+    간단한간식: "snack",
+    스낵: "snack",
+    snack: "snack",
+  };
+  for (const [keyword, mealType] of Object.entries(map)) {
+    if (normalized.includes(keyword)) {
+      return mealType;
+    }
+  }
+  return null;
+};
+
+const buildStepsFromMarkdown = (markdown?: string | null): CookingStep[] => {
+  if (!markdown) return [];
+  const lines = markdown.split(/\r?\n/);
+  const steps: CookingStep[] = [];
+  let current: CookingStep | null = null;
+  const stepRegex = /^\s*(\d+)[\.\)]\s*(.*)/;
+
+  lines.forEach((line) => {
+    const match = stepRegex.exec(line);
+    if (match) {
+      if (current) {
+        current.description = current.description.trim();
+        steps.push(current);
+      }
+      const titleText = match[2]?.trim() || `단계 ${steps.length + 1}`;
+      current = {
+        stepNumber: steps.length + 1,
+        title: titleText.startsWith("📌") ? titleText : `단계 ${steps.length + 1}`,
+        description: titleText.startsWith("📌") ? "" : titleText,
+      };
+    } else if (current) {
+      current.description = `${current.description}\n${line}`.trim();
+    }
+  });
+
+  if (current) {
+    current.description = current.description.trim();
+    steps.push(current);
+  }
+
+  return steps;
+};
 
 export default function RecommendPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const apiEndpoint = API_BASE_URL;
   
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState("");
@@ -154,10 +250,10 @@ export default function RecommendPage() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [healthWarning, setHealthWarning] = useState<string>("");
   
-  // 식사 유형 선택 상태 (새로 추가)
-  const [pendingUserRequest, setPendingUserRequest] = useState<string>("");  // 사용자 요청 임시 저장
-  const [showMealTypeSelection, setShowMealTypeSelection] = useState(false);  // 식사 유형 선택 UI 표시 여부
+  // 식사 유형 추적
   const [selectedMealType, setSelectedMealType] = useState<string | null>(null);  // 선택된 식사 유형
+  const [pendingUserRequest, setPendingUserRequest] = useState<string | null>(null);
+  const [showMealTypeSelection, setShowMealTypeSelection] = useState(false);
 
   // 조리 상태
   const [recipeDetail, setRecipeDetail] = useState<RecipeDetail | null>(null);
@@ -166,6 +262,11 @@ export default function RecommendPage() {
   const [recipeIntro, setRecipeIntro] = useState("");
   const [loadingRecipeDetail, setLoadingRecipeDetail] = useState(false);
   const [cookingComplete, setCookingComplete] = useState(false);
+  const [ingredientChecklistRecipe, setIngredientChecklistRecipe] = useState<string | null>(null);
+  const [ingredientChecklistItems, setIngredientChecklistItems] = useState<string[]>([]);
+  const [ingredientChecklistState, setIngredientChecklistState] = useState<Record<string, boolean>>({});
+  const [isGeneratingCookingSteps, setIsGeneratingCookingSteps] = useState(false);
+  const [cookingMarkdown, setCookingMarkdown] = useState<string | null>(null);
 
   // 식단 추천 상태 (diet 탭용)
   const [dietFlowStep, setDietFlowStep] = useState<"chat" | "select" | "cooking" | "complete">("chat");
@@ -214,9 +315,8 @@ export default function RecommendPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-          credentials: 'include',
+            credentials: 'include',
         });
 
         if (response.ok) {
@@ -243,7 +343,7 @@ export default function RecommendPage() {
     };
 
     checkAuth();
-  }, [router]);
+  }, [router, apiEndpoint]);
 
   // 채팅 메시지 자동 스크롤
   useEffect(() => {
@@ -287,44 +387,124 @@ export default function RecommendPage() {
   };
 
   // 식사 유형 선택 처리
-  const handleMealTypeSelect = async (mealType: string) => {
-    const mealTypeKr = {
-      'breakfast': '아침',
-      'lunch': '점심',
-      'dinner': '저녁',
-      'snack': '간식'
-    }[mealType] || mealType;
-    
-    // 사용자 선택 메시지 추가
-    setMessages((prev) => [...prev, { role: "user", text: mealTypeKr }]);
-    setShowMealTypeSelection(false);
-    setSelectedMealType(mealType);
-    
-    // 실제 레시피 추천 API 호출
-    await fetchRecipeRecommendations(pendingUserRequest, mealType);
+  const buildConversationHistory = (baseMessages: ChatMessage[]) => {
+    return baseMessages.slice(-6).map((msg) => ({
+      role: msg.role === "user" ? "user" : "assistant",
+      content: msg.text
+    }));
   };
   
-  // 레시피 추천 API 호출 (분리)
-  const fetchRecipeRecommendations = async (userText: string, mealType: string) => {
+  const handleRecipeAgentResponse = (response: RecipeAgentResponse, fallbackUserText: string) => {
+    if (response.action_type === "CONFIRMATION") {
+      setPendingUserRequest(fallbackUserText);
+      setShowMealTypeSelection(true);
+      setRecommendedRecipes([]);
+      setSelectedRecipe(null);
+      setHealthWarning("");
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "bot",
+          text: response.message,
+          actionType: response.action_type,
+          suggestions: response.suggestions
+        }
+      ]);
+      return;
+    }
+    
+    if (response.action_type === "TEXT_ONLY") {
+      setPendingUserRequest(null);
+      setShowMealTypeSelection(false);
+      setRecommendedRecipes([]);
+      setSelectedRecipe(null);
+      setHealthWarning("");
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "bot",
+          text: response.message,
+          actionType: response.action_type,
+          suggestions: response.suggestions
+        }
+      ]);
+      return;
+    }
+    
+    const recipePayload = response.data?.recipes ?? [];
+    const recipes: Recipe[] = recipePayload.map((rec) => ({
+      name: rec.name,
+      description: rec.description,
+      calories: rec.calories,
+      cooking_time: rec.cooking_time,
+      difficulty: rec.difficulty,
+      suitable_reason: rec.suitable_reason,
+      fullInfo: {
+        description: rec.description,
+        calories: rec.calories,
+        cooking_time: rec.cooking_time,
+        difficulty: rec.difficulty
+      }
+    }));
+    
+    setPendingUserRequest(null);
+    setShowMealTypeSelection(false);
+    setRecommendedRecipes(recipes);
+    setSelectedRecipe(null);
+    
+    const healthWarn = response.data?.health_warning || "";
+    setHealthWarning(healthWarn);
+    if (healthWarn) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "bot",
+          text: healthWarn,
+          healthWarning: healthWarn
+        }
+      ]);
+    }
+    
+    const botMessage = response.message || response.data?.user_friendly_message || `✅ "${fallbackUserText}" 관련 레시피를 추천해드릴게요!\n\n아래에서 원하시는 레시피를 선택해주세요! 🍳`;
+    
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "bot",
+        text: botMessage,
+        recipeCards: recipes,
+        actionType: response.action_type,
+        suggestions: response.suggestions
+      }
+    ]);
+  };
+  
+  const requestRecipeAgentResponse = async ({
+    latestUserMessage,
+    baseRequest,
+    mealType,
+    conversationMessages,
+  }: {
+    latestUserMessage: string;
+    baseRequest?: string;
+    mealType?: string | null;
+    conversationMessages: ChatMessage[];
+  }) => {
+    if (!latestUserMessage) return;
+    
     setIsLoading(true);
     
-    // 재치있는 로딩 메시지 순환
     let messageIndex = 0;
     const messageInterval = setInterval(() => {
-      setLoadingStatus({ 
-        text: funnyRecipeLoadingMessages[messageIndex], 
-        seconds: 0 
+      setLoadingStatus({
+        text: funnyRecipeLoadingMessages[messageIndex],
+        seconds: 0
       });
       messageIndex = (messageIndex + 1) % funnyRecipeLoadingMessages.length;
-    }, 2000); // 2초마다 메시지 변경
-    
-    // 시작 메시지
+    }, 2000);
     setLoadingStatus({ text: funnyRecipeLoadingMessages[0], seconds: 0 });
-
+    
     try {
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
-      // 1단계: 사용자 인증 확인
       const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
         credentials: 'include',
       });
@@ -337,80 +517,30 @@ export default function RecommendPage() {
         ]);
         setIsLoading(false);
         setLoadingStatus({ text: "", seconds: 0 });
+        setPendingUserRequest("");
         return;
       }
       
       const authData = await authRes.json();
       const userId = authData.user_id;
       
-      // 최근 메시지에서 alert 메시지가 있는지 확인
-      const recentMessages = messages.slice(-5).map(msg => ({
-        role: msg.role === "user" ? "user" : "assistant",
-        content: msg.text
-      }));
-      
-      // 최근에 alert 메시지가 있는지 확인
-      const hasRecentAlert = recentMessages.some(msg => 
-        msg.role === "assistant" && (
-          msg.content.includes("목표 칼로리") || 
-          msg.content.includes("권장 나트륨량") ||
-          msg.content.includes("자제하는 편이")
-        )
-      );
+      const conversation_history = buildConversationHistory(conversationMessages);
       
       const res = await fetch(`${apiEndpoint}/api/v1/recipes/recommendations?user_id=${userId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: 'include',
-        body: JSON.stringify({ 
-          user_request: userText,
-          conversation_history: recentMessages,  // 최근 메시지 히스토리 전달
-          meal_type: mealType  // ✨ 식사 유형 전달
+        body: JSON.stringify({
+          user_request: baseRequest || latestUserMessage,
+          conversation_history,
+          meal_type: mealType || null
         }),
       });
-
+      
       const result = await res.json();
-
+      
       if (result.success && result.data) {
-        const responseData = result.data;
-        
-        // API 응답을 프론트엔드 형식으로 변환
-        const recipes: Recipe[] = responseData.recommendations.map((rec: any) => ({
-          name: rec.name,
-          description: rec.description, // 설명만 저장
-          calories: rec.calories,
-          cooking_time: rec.cooking_time,
-          difficulty: rec.difficulty,
-          fullInfo: {
-            description: rec.description,
-            calories: rec.calories,
-            cooking_time: rec.cooking_time,
-            difficulty: rec.difficulty
-          }
-        }));
-        
-        setHealthWarning(responseData.health_warning || "");
-        setRecommendedRecipes(recipes);
-        
-        // 1️⃣ 칼로리/나트륨 초과 경고가 있으면 첫 번째 메시지로 전송
-        if (responseData.health_warning) {
-          setMessages((prev) => [...prev, { 
-            role: "bot", 
-            text: responseData.health_warning,
-            healthWarning: responseData.health_warning
-          }]);
-        }
-        
-        // 2️⃣ 레시피 추천은 두 번째 메시지로 전송
-        const botMessage = responseData.user_friendly_message || `✅ "${userText}" 관련 레시피를 추천해드릴게요!\n\n아래에서 원하시는 레시피를 선택해주세요! 🍳`;
-        
-        setMessages((prev) => [...prev, { 
-          role: "bot", 
-          text: botMessage,
-          recipeCards: recipes
-        }]);
-        
-        // flowStep은 'chat' 상태 유지 (채팅창 내에서 선택 가능)
+        handleRecipeAgentResponse(result.data as RecipeAgentResponse, latestUserMessage);
       } else {
         setMessages((prev) => [
           ...prev,
@@ -423,6 +553,7 @@ export default function RecommendPage() {
         ...prev,
         { role: "bot", text: "❌ 서버와 통신 중 문제가 발생했습니다. 나중에 다시 시도해주세요." },
       ]);
+      setPendingUserRequest("");
     } finally {
       clearInterval(messageInterval);
       setIsLoading(false);
@@ -430,145 +561,229 @@ export default function RecommendPage() {
     }
   };
   
-  // 채팅 보내기 - 식사 유형 선택 단계 추가
-  const sendChat = async () => {
-    if (!chatInput.trim() || isLoading) return;
-
-    const userText = chatInput.trim();
-    setChatInput("");
-
-    // 사용자 메시지 추가
-    setMessages((prev) => [...prev, { role: "user", text: userText }]);
+  const processRecipeUserMessage = async (userText: string, baseRequest?: string, mealTypeOverride?: string | null) => {
+    const trimmed = userText.trim();
+    if (!trimmed) return;
     
-    // 사용자 요청 저장 후 식사 유형 선택 UI 표시
-    setPendingUserRequest(userText);
+    const updatedMessages = [...messages, { role: "user", text: trimmed }];
+    setMessages(updatedMessages);
+    setPendingUserRequest(null);
+    setShowMealTypeSelection(false);
     
-    // 봇 메시지: 식사 유형 선택 요청
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "bot",
-        text: "어떤 식사를 준비하시나요? 아래에서 선택해주세요 😊"
-      }
-    ]);
+    const detectedMealType = mealTypeOverride ?? detectMealTypeFromText(trimmed);
+    if (detectedMealType) {
+      setSelectedMealType(detectedMealType);
+    }
     
-    setShowMealTypeSelection(true);
+    setRecommendedRecipes([]);
+    setSelectedRecipe(null);
+    setHealthWarning("");
+    
+    await requestRecipeAgentResponse({
+      latestUserMessage: trimmed,
+      baseRequest: baseRequest || trimmed,
+      mealType: detectedMealType,
+      conversationMessages: updatedMessages
+    });
   };
 
-  // 레시피 선택 - 채팅창 내에서 처리
+  const sendChat = async () => {
+    if (!chatInput.trim() || isLoading) return;
+    
+    const userText = chatInput.trim();
+    setChatInput("");
+    await processRecipeUserMessage(userText);
+  };
+  
+  const handleSuggestionClick = async (text: string) => {
+    if (isLoading) return;
+    await processRecipeUserMessage(text);
+  };
+
+  const handleMealTypeSelect = async (mealType: string) => {
+    if (!pendingUserRequest) {
+      setShowMealTypeSelection(false);
+      return;
+    }
+    const mealTypeKr = {
+      breakfast: "아침으로 부탁해",
+      lunch: "점심으로 부탁해",
+      dinner: "저녁으로 부탁해",
+      snack: "간식으로 부탁해"
+    }[mealType] || "그 끼니로 부탁해";
+    
+    setShowMealTypeSelection(false);
+    await processRecipeUserMessage(mealTypeKr, pendingUserRequest, mealType);
+    setPendingUserRequest(null);
+  };
+
+  // 레시피 선택 - 재료 확인 단계
   const selectRecipe = async (recipe: Recipe) => {
     setSelectedRecipe(recipe);
+    setIngredientChecklistRecipe(recipe.name);
+    setIngredientChecklistItems([]);
+    setIngredientChecklistState({});
+    setCookingMarkdown(null);
+    setRecipeDetail(null);
     setLoadingRecipeDetail(true);
     
-    // 재치있는 로딩 메시지 순환
-    const funnyDetailLoadingMessages = [
-      '📖 레시피 책 펼치는 중...',
-      '👨‍🍳 셰프님께 물어보는 중...',
-      '🔍 비밀 레시피 찾는 중...',
-      '📝 조리법 정리하는 중...',
-      '🧂 양념 비율 계산 중...',
-      '✨ 맛있게 만드는 팁 준비 중...',
-      '🎯 완벽한 레시피 거의 완성!'
-    ];
-    
-    let messageIndex = 0;
-    setLoadingStatus({ text: funnyDetailLoadingMessages[0], seconds: 0 });
-    
-    const messageInterval = setInterval(() => {
-      messageIndex = (messageIndex + 1) % funnyDetailLoadingMessages.length;
-      setLoadingStatus({ 
-        text: funnyDetailLoadingMessages[messageIndex], 
-        seconds: 0 
-      });
-    }, 2000);
-    
     try {
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
-      // 사용자 인증 확인
       const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
         credentials: 'include',
       });
-      
       if (!authRes.ok) {
-        clearInterval(messageInterval);
-        setMessages((prev) => [...prev, { 
-          role: "bot", 
-          text: "⚠️ 로그인이 필요합니다." 
-        }]);
+        setMessages((prev) => [...prev, { role: "bot", text: "⚠️ 로그인이 필요합니다." }]);
         setLoadingRecipeDetail(false);
-        setLoadingStatus({ text: "", seconds: 0 });
         return;
       }
-      
       const authData = await authRes.json();
       const userId = authData.user_id;
-      
-      // 레시피 상세 정보 조회
-      const res = await fetch(`${apiEndpoint}/api/v1/recipes/detail?user_id=${userId}`, {
+      const res = await fetch(`${apiEndpoint}/api/v1/recipes/ingredient-check?user_id=${userId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: 'include',
-        body: JSON.stringify({ recipe_name: recipe.name }),
+        body: JSON.stringify({ recipe_name: recipe.name })
       });
       const result = await res.json();
-
       if (result.success && result.data) {
-        const detail: RecipeDetail = result.data;
-        setRecipeDetail(detail);
-        setCookingSteps(detail.steps);
-        setCurrentStepIndex(-1);  // 아직 조리 시작 안함
-        setCookingComplete(false);
-        
-        // 레시피 소개 + 재료 메시지
-        let detailMessage = `✅ "${detail.recipe_name}" 레시피를 시작합니다!\n\n`;
-        detailMessage += `📖 ${detail.intro}\n\n`;
-        detailMessage += `⏱️ 예상 조리 시간: ${detail.estimated_time}\n`;
-        detailMessage += `📊 총 ${detail.total_steps}단계\n\n`;
-        detailMessage += `🥘 필요한 재료:\n`;
-        detail.ingredients.forEach((ing) => {
-          detailMessage += `  • ${ing.name}: ${ing.amount}\n`;
+        const ingredients: string[] = result.data.ingredients || [];
+        const defaultState: Record<string, boolean> = {};
+        ingredients.forEach((item) => {
+          defaultState[item] = true;
         });
-        detailMessage += `\n💡 준비가 되셨으면 아래 버튼을 눌러 조리를 시작하세요!`;
-        
-        setMessages((prev) => [...prev, { 
-          role: "bot", 
-          text: detailMessage
-        }]);
-        
-        // flowStep은 chat 상태 유지 (채팅창 내에서 진행)
+        setIngredientChecklistItems(ingredients);
+        setIngredientChecklistState(defaultState);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "bot",
+            text: `"${recipe.name}" 준비 전에 필요한 재료를 확인해볼게요.`,
+            actionType: "INGREDIENT_CHECK",
+            ingredientCheck: {
+              recipeName: recipe.name,
+              ingredients
+            }
+          }
+        ]);
       } else {
-        setMessages((prev) => [...prev, { 
-          role: "bot", 
-          text: `❌ 레시피 상세 정보를 불러오는데 실패했습니다: ${result.message || '알 수 없는 오류'}` 
-        }]);
+        setMessages((prev) => [
+          ...prev,
+          { role: "bot", text: `❌ 재료 확인에 실패했습니다: ${result.message || '알 수 없는 오류'}` }
+        ]);
       }
     } catch (error) {
-      console.error('❌ 레시피 상세 조회 오류:', error);
-      setMessages((prev) => [...prev, { 
-        role: "bot", 
-        text: "❌ 레시피 상세 정보를 불러오는 중 오류가 발생했습니다." 
-      }]);
+      console.error('❌ 재료 확인 오류:', error);
+      setMessages((prev) => [
+        ...prev,
+        { role: "bot", text: "❌ 재료 확인 중 오류가 발생했습니다." }
+      ]);
     } finally {
-      clearInterval(messageInterval);
       setLoadingRecipeDetail(false);
-      setLoadingStatus({ text: "", seconds: 0 });
+    }
+  };
+
+  const toggleIngredientAvailability = (ingredient: string) => {
+    setIngredientChecklistState((prev) => ({
+      ...prev,
+      [ingredient]: !prev[ingredient]
+    }));
+  };
+
+  const handleStartCustomCooking = async () => {
+    if (!ingredientChecklistRecipe || !selectedRecipe) return;
+    setIsGeneratingCookingSteps(true);
+    
+    const excludedIngredients = ingredientChecklistItems.filter((item) => !ingredientChecklistState[item]);
+    
+    try {
+      const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+        credentials: 'include',
+      });
+      if (!authRes.ok) {
+        setMessages((prev) => [...prev, { role: "bot", text: "⚠️ 로그인이 필요합니다." }]);
+        setIsGeneratingCookingSteps(false);
+        return;
+      }
+      const authData = await authRes.json();
+      const userId = authData.user_id;
+      const res = await fetch(`${apiEndpoint}/api/v1/recipes/custom-recipe?user_id=${userId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: 'include',
+        body: JSON.stringify({
+          recipe_name: ingredientChecklistRecipe,
+          excluded_ingredients: excludedIngredients,
+          available_ingredients: ingredientChecklistItems,
+          meal_type: selectedMealType
+        })
+      });
+      const result = await res.json();
+      if (result.success && result.data) {
+        const customData = result.data;
+        const nutrition = customData.nutrition_info;
+        let convertedSteps: CookingStep[] = Array.isArray(customData.steps)
+          ? customData.steps.map((step: any, index: number) => ({
+              stepNumber: step.step_number ?? step.stepNumber ?? index + 1,
+              title: step.title || `단계 ${index + 1}`,
+              description: step.description || "",
+              tip: step.tip,
+            }))
+          : [];
+        if (convertedSteps.length === 0 && customData.instructions_markdown) {
+          convertedSteps = buildStepsFromMarkdown(customData.instructions_markdown);
+        }
+        setRecipeDetail({
+          recipe_name: customData.recipe_name,
+          intro: customData.intro || "",
+          estimated_time: customData.estimated_time || "",
+          total_steps: convertedSteps.length,
+          ingredients: customData.ingredients || [],
+          steps: convertedSteps,
+          nutrition_info: {
+            calories: nutrition.calories,
+            protein: nutrition.protein,
+            carbs: nutrition.carbs,
+            fat: nutrition.fat,
+            fiber: nutrition.fiber,
+            sodium: nutrition.sodium
+          }
+        });
+        setRecipeIntro(customData.intro || "");
+        setCookingMarkdown(customData.instructions_markdown || "");
+        setCookingSteps(convertedSteps);
+        setCurrentStepIndex(-1);
+        setCookingComplete(false);
+        setIngredientChecklistRecipe(null);
+        setIngredientChecklistItems([]);
+        setIngredientChecklistState({});
+        setFlowStep("cooking");
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "bot",
+            text: `"${customData.recipe_name}" 재료 구성이 준비됐어요.\n아래의 '요리 시작하기' 버튼을 눌러 단계별로 진행해볼까요?`
+          }
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { role: "bot", text: `❌ 맞춤 조리법 생성 실패: ${result.message || '알 수 없는 오류'}` }
+        ]);
+      }
+    } catch (error) {
+      console.error('❌ 맞춤 조리법 오류:', error);
+      setMessages((prev) => [
+        ...prev,
+        { role: "bot", text: "❌ 맞춤 조리법 생성 중 오류가 발생했습니다." }
+      ]);
+    } finally {
+      setIsGeneratingCookingSteps(false);
     }
   };
 
   // 조리 시작 (1단계 표시)
   const startCooking = () => {
     if (cookingSteps.length === 0) return;
-    
-    const step = cookingSteps[0];
-    let stepMessage = `🔥 조리 단계 1/${cookingSteps.length}\n\n`;
-    stepMessage += `📌 ${step.title}\n\n`;
-    stepMessage += `${step.description}`;
-    if (step.tip) {
-      stepMessage += `\n\n💡 Tip: ${step.tip}`;
-    }
-    
-    setMessages((prev) => [...prev, { role: "bot", text: stepMessage }]);
     setCurrentStepIndex(0);
   };
 
@@ -577,16 +792,6 @@ export default function RecommendPage() {
     const nextIndex = currentStepIndex + 1;
     
     if (nextIndex < cookingSteps.length) {
-      // 다음 단계 표시
-      const step = cookingSteps[nextIndex];
-      let stepMessage = `🔥 조리 단계 ${nextIndex + 1}/${cookingSteps.length}\n\n`;
-      stepMessage += `📌 ${step.title}\n\n`;
-      stepMessage += `${step.description}`;
-      if (step.tip) {
-        stepMessage += `\n\n💡 Tip: ${step.tip}`;
-      }
-      
-      setMessages((prev) => [...prev, { role: "bot", text: stepMessage }]);
       setCurrentStepIndex(nextIndex);
     } else {
       // 조리 완료
@@ -598,16 +803,7 @@ export default function RecommendPage() {
   const prevStep = () => {
     const prevIndex = currentStepIndex - 1;
     
-    if (prevIndex >= 0) {
-      const step = cookingSteps[prevIndex];
-      let stepMessage = `🔥 조리 단계 ${prevIndex + 1}/${cookingSteps.length} (재확인)\n\n`;
-      stepMessage += `📌 ${step.title}\n\n`;
-      stepMessage += `${step.description}`;
-      if (step.tip) {
-        stepMessage += `\n\n💡 Tip: ${step.tip}`;
-      }
-      
-      setMessages((prev) => [...prev, { role: "bot", text: stepMessage }]);
+  if (prevIndex >= 0) {
       setCurrentStepIndex(prevIndex);
     }
   };
@@ -641,8 +837,6 @@ export default function RecommendPage() {
     if (!selectedRecipe || !recipeDetail) return;
 
     try {
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
       // 레시피 저장 API 호출 (새로운 API 사용)
       console.log(`📤 레시피 저장 요청: meal_type=${selectedMealType}`);
       
@@ -665,7 +859,7 @@ export default function RecommendPage() {
             sodium: recipeDetail.nutrition_info.sodium || "0mg"
           },
           // 재료 목록 전달
-          ingredients: recipeDetail.ingredients ? recipeDetail.ingredients.map((ing: any) => ing.name) : [],
+          ingredients: recipeDetail.ingredients ? recipeDetail.ingredients.map((ing) => ing.name) : [],
           // 음식 분류 추론 (레시피 이름에서)
           food_class_1: getFoodClassFromName(selectedRecipe.name)
         }),
@@ -697,6 +891,8 @@ export default function RecommendPage() {
     setMessages([INITIAL_BOT_MESSAGE]);
     setRecommendedRecipes([]);
     setSelectedRecipe(null);
+    setSelectedMealType(null);
+    setPendingUserRequest(null);
     setHealthWarning("");
     setRecipeDetail(null);
     setCookingSteps([]);
@@ -704,6 +900,11 @@ export default function RecommendPage() {
     setRecipeIntro("");
     setCookingComplete(false);
     setLoadingRecipeDetail(false);
+    setIngredientChecklistRecipe(null);
+    setIngredientChecklistItems([]);
+    setIngredientChecklistState({});
+    setCookingMarkdown(null);
+    setIsGeneratingCookingSteps(false);
   };
 
   // 재치있는 식단 추천 로딩 메시지 배열
@@ -741,8 +942,6 @@ export default function RecommendPage() {
     }, 2000); // 2초마다 메시지 변경
 
     try {
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
       // 사용자 인증 확인
       const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
         credentials: 'include',
@@ -776,18 +975,19 @@ export default function RecommendPage() {
       const result = await res.json();
 
       if (result.success && result.data) {
-        const responseData = result.data;
+        const responseData: DietPlanApiResponse = result.data;
         
         // API 응답을 프론트엔드 형식으로 변환
-        const dietPlans: DietPlan[] = responseData.dietPlans.map((plan: any) => ({
+        const rawDietPlans = Array.isArray(responseData.dietPlans) ? responseData.dietPlans : [];
+        const dietPlans: DietPlan[] = rawDietPlans.map((plan) => ({
           name: plan.name,
           description: plan.description,
           totalCalories: plan.totalCalories,
           meals: {
-            breakfast: plan.meals.breakfast,
-            lunch: plan.meals.lunch,
-            dinner: plan.meals.dinner,
-            snack: plan.meals.snack
+            breakfast: plan.meals?.breakfast,
+            lunch: plan.meals?.lunch,
+            dinner: plan.meals?.dinner,
+            snack: plan.meals?.snack
           },
           nutrients: plan.nutrients,
           meal_details: plan.meal_details  // 끼니별 상세 정보 추가
@@ -899,8 +1099,6 @@ export default function RecommendPage() {
     setIsSaving(true);
 
     try {
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
       // 사용자 ID 가져오기
       const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
         credentials: 'include',
@@ -1163,41 +1361,83 @@ export default function RecommendPage() {
                                 <div className="whitespace-pre-line mb-2">
                                   {m.text}
                                 </div>
-                            
-                            {/* 식사 유형 선택 버튼 (showMealTypeSelection이 true일 때만 표시) */}
-                            {idx === messages.length - 1 && showMealTypeSelection && (
-                              <div className="mt-3 grid grid-cols-2 gap-2">
-                                <button
-                                  onClick={() => handleMealTypeSelect('breakfast')}
-                                  className="py-4 px-3 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border-2 border-orange-200 hover:border-orange-400 transition-all active:scale-95"
-                                >
-                                  <div className="text-3xl mb-1">🌅</div>
-                                  <div className="text-sm font-bold text-slate-800">아침</div>
-                                </button>
-                                <button
-                                  onClick={() => handleMealTypeSelect('lunch')}
-                                  className="py-4 px-3 rounded-xl bg-gradient-to-br from-yellow-50 to-yellow-100 hover:from-yellow-100 hover:to-yellow-200 border-2 border-yellow-200 hover:border-yellow-400 transition-all active:scale-95"
-                                >
-                                  <div className="text-3xl mb-1">☀️</div>
-                                  <div className="text-sm font-bold text-slate-800">점심</div>
-                                </button>
-                                <button
-                                  onClick={() => handleMealTypeSelect('dinner')}
-                                  className="py-4 px-3 rounded-xl bg-gradient-to-br from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 border-2 border-indigo-200 hover:border-indigo-400 transition-all active:scale-95"
-                                >
-                                  <div className="text-3xl mb-1">🌙</div>
-                                  <div className="text-sm font-bold text-slate-800">저녁</div>
-                                </button>
-                                <button
-                                  onClick={() => handleMealTypeSelect('snack')}
-                                  className="py-4 px-3 rounded-xl bg-gradient-to-br from-pink-50 to-pink-100 hover:from-pink-100 hover:to-pink-200 border-2 border-pink-200 hover:border-pink-400 transition-all active:scale-95"
-                                >
-                                  <div className="text-3xl mb-1">🍪</div>
-                                  <div className="text-sm font-bold text-slate-800">간식</div>
-                                </button>
-                              </div>
-                            )}
-                            
+                                
+                                {/* 빠른 응답 제안 */}
+                                {m.suggestions && m.suggestions.length > 0 && (
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    {m.suggestions.map((suggestion, suggestionIdx) => (
+                                      <button
+                                        key={`suggestion-${idx}-${suggestionIdx}`}
+                                        onClick={() => handleSuggestionClick(suggestion)}
+                                        className="px-3 py-1 text-xs rounded-full border border-slate-300 bg-white text-slate-600 hover:border-green-400 hover:text-green-600 transition"
+                                        type="button"
+                                      >
+                                        {suggestion}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {/* 재료 확인 단계 */}
+                                {m.actionType === "INGREDIENT_CHECK" && m.ingredientCheck && ingredientChecklistRecipe === m.ingredientCheck.recipeName && (
+                                  <div className="mt-3 space-y-3 border border-slate-200 rounded-lg p-3 bg-white">
+                                    <p className="text-xs text-slate-600">보유 중인 재료만 체크한 뒤 요리를 시작하세요.</p>
+                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                      {m.ingredientCheck.ingredients.map((ingredient) => (
+                                        <label key={ingredient} className="flex items-center gap-2 text-sm text-slate-700">
+                                          <input
+                                            type="checkbox"
+                                            className="w-4 h-4 text-green-500"
+                                            checked={ingredientChecklistState[ingredient] ?? true}
+                                            onChange={() => toggleIngredientAvailability(ingredient)}
+                                          />
+                                          <span>{ingredient}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                    <button
+                                      onClick={handleStartCustomCooking}
+                                      disabled={isGeneratingCookingSteps}
+                                      className="w-full py-2 rounded-lg font-semibold text-sm text-white bg-green-500 active:bg-green-600 disabled:opacity-60"
+                                    >
+                                      {isGeneratingCookingSteps ? "조리법 준비 중..." : "요리 시작"}
+                                    </button>
+                                  </div>
+                                )}
+                                
+                                {/* 식사 유형 선택 버튼 */}
+                                {idx === messages.length - 1 && showMealTypeSelection && m.actionType === "CONFIRMATION" && (
+                                  <div className="mt-3 grid grid-cols-2 gap-2">
+                                    <button
+                                      onClick={() => handleMealTypeSelect('breakfast')}
+                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border-2 border-orange-200 hover:border-orange-400 transition-all active:scale-95"
+                                    >
+                                      <div className="text-3xl mb-1">🌅</div>
+                                      <div className="text-sm font-bold text-slate-800">아침</div>
+                                    </button>
+                                    <button
+                                      onClick={() => handleMealTypeSelect('lunch')}
+                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-yellow-50 to-yellow-100 hover:from-yellow-100 hover:to-yellow-200 border-2 border-yellow-200 hover:border-yellow-400 transition-all active:scale-95"
+                                    >
+                                      <div className="text-3xl mb-1">☀️</div>
+                                      <div className="text-sm font-bold text-slate-800">점심</div>
+                                    </button>
+                                    <button
+                                      onClick={() => handleMealTypeSelect('dinner')}
+                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 border-2 border-indigo-200 hover:border-indigo-400 transition-all active:scale-95"
+                                    >
+                                      <div className="text-3xl mb-1">🌙</div>
+                                      <div className="text-sm font-bold text-slate-800">저녁</div>
+                                    </button>
+                                    <button
+                                      onClick={() => handleMealTypeSelect('snack')}
+                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-pink-50 to-pink-100 hover:from-pink-100 hover:to-pink-200 border-2 border-pink-200 hover:border-pink-400 transition-all active:scale-95"
+                                    >
+                                      <div className="text-3xl mb-1">🍪</div>
+                                      <div className="text-sm font-bold text-slate-800">간식</div>
+                                    </button>
+                                  </div>
+                                )}
                             {/* 레시피 카드 표시 - 메시지 내부에 포함 */}
                             {m.recipeCards && m.recipeCards.length > 0 && (
                               <div className="mt-2 space-y-2">
@@ -1256,53 +1496,6 @@ export default function RecommendPage() {
                     )}
                   </div>
 
-                  {/* 조리 단계 버튼들 */}
-                  {recipeDetail && cookingSteps.length > 0 && !cookingComplete && (
-                    <div className="border-t border-slate-200 pt-3 pb-2 space-y-2">
-                      {currentStepIndex === -1 ? (
-                        // 조리 시작 버튼
-                        <>
-                          <button
-                            onClick={startCooking}
-                            className="w-full py-3 bg-green-500 text-white rounded-lg font-bold text-sm active:bg-green-600 transition shadow-md"
-                          >
-                            🔥 조리 시작하기
-                          </button>
-                          <button
-                            onClick={resetFlow}
-                            className="w-full py-3 bg-slate-200 text-slate-700 rounded-lg font-bold text-sm active:bg-slate-300 transition"
-                          >
-                            🔙 메뉴로 돌아가기
-                          </button>
-                        </>
-                      ) : (
-                        // 이전/다음/메뉴 버튼
-                        <>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={prevStep}
-                              disabled={currentStepIndex === 0}
-                              className="flex-1 py-3 bg-slate-200 text-slate-700 rounded-lg font-bold text-sm active:bg-slate-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              ← 이전
-                            </button>
-                            <button
-                              onClick={nextStep}
-                              className="flex-1 py-3 bg-green-500 text-white rounded-lg font-bold text-sm active:bg-green-600 transition shadow-md"
-                            >
-                              {currentStepIndex < cookingSteps.length - 1 ? '다음 →' : '완료 🎉'}
-                            </button>
-                          </div>
-                          <button
-                            onClick={resetFlow}
-                            className="w-full py-3 bg-slate-200 text-slate-700 rounded-lg font-bold text-sm active:bg-slate-300 transition"
-                          >
-                            🔙 메뉴로 돌아가기
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
 
                   {/* 식단 기록 및 메뉴 버튼 */}
                   {cookingComplete && (
@@ -1354,9 +1547,9 @@ export default function RecommendPage() {
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
                   <div className="font-semibold mb-1">💡 이렇게 물어보세요</div>
                   <ul className="list-disc pl-4 space-y-1">
-                    <li>"나 오늘 대창 먹을건데 레시피 추천해줘"</li>
-                    <li>"닭가슴살이랑 브로콜리 있는데 요리법 알려줘"</li>
-                    <li>"저염식 고등어 요리 레시피 알려줘"</li>
+                    <li>&quot;나 오늘 대창 먹을건데 레시피 추천해줘&quot;</li>
+                    <li>&quot;닭가슴살이랑 브로콜리 있는데 요리법 알려줘&quot;</li>
+                    <li>&quot;저염식 고등어 요리 레시피 알려줘&quot;</li>
                   </ul>
                 </div>
               </div>
@@ -1410,27 +1603,63 @@ export default function RecommendPage() {
                   <p className="text-sm text-slate-600">{recipeIntro}</p>
                 </div>
 
+                {cookingMarkdown && (
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-800">
+                    <div className="text-xs font-semibold text-slate-500 mb-2">재료 변경 사항</div>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} className="prose prose-sm max-w-none">
+                      {cookingMarkdown}
+                    </ReactMarkdown>
+                  </div>
+                )}
+
                 <div className="bg-white rounded-xl border-2 border-green-500 shadow-lg p-6">
                   <div className="text-center mb-4">
-                    <div className="inline-block bg-green-500 text-white px-3 py-1.5 rounded-full font-bold text-sm mb-3">
-                      STEP {cookingSteps[currentStepIndex]?.stepNumber} / {cookingSteps.length}
-                    </div>
+                    {currentStepIndex >= 0 ? (
+                      <div className="inline-block bg-green-500 text-white px-3 py-1.5 rounded-full font-bold text-sm mb-3">
+                        STEP {cookingSteps[currentStepIndex]?.stepNumber} / {cookingSteps.length}
+                      </div>
+                    ) : (
+                      <div className="inline-block bg-slate-200 text-slate-700 px-3 py-1.5 rounded-full font-bold text-sm mb-3">
+                        조리를 시작해보세요
+                      </div>
+                    )}
                   </div>
 
                   <div className="text-center mb-6">
-                    <p className="text-base text-slate-800 leading-relaxed">
-                      {cookingSteps[currentStepIndex]?.instruction}
-                    </p>
+                    {currentStepIndex >= 0 ? (
+                      <div className="space-y-3 text-slate-800">
+                        <p className="text-base font-semibold">{cookingSteps[currentStepIndex]?.title}</p>
+                        <p className="text-sm leading-relaxed whitespace-pre-line">
+                          {cookingSteps[currentStepIndex]?.description}
+                        </p>
+                        {cookingSteps[currentStepIndex]?.tip && (
+                          <p className="text-xs text-green-600 whitespace-pre-line">
+                            💡 {cookingSteps[currentStepIndex]?.tip}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500">아래 버튼을 눌러 조리를 시작하세요.</p>
+                    )}
                   </div>
 
-                  <div className="flex gap-3 justify-center">
-                    <button
-                      onClick={nextStep}
-                      className="flex-1 py-3 bg-green-500 text-white rounded-lg font-bold text-base active:bg-green-600 transition shadow-md"
-                    >
-                      {currentStepIndex < cookingSteps.length - 1 ? "다음 단계 →" : "조리 완료!"}
-                    </button>
-                  </div>
+                  {currentStepIndex >= 0 && (
+                    <div className="flex gap-3 justify-center">
+                      <button
+                        onClick={prevStep}
+                        disabled={currentStepIndex === 0}
+                        className="py-3 px-4 bg-slate-200 text-slate-700 rounded-lg font-bold text-base active:bg-slate-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        ← 이전
+                      </button>
+                      <button
+                        onClick={nextStep}
+                        className="flex-1 py-3 bg-green-500 text-white rounded-lg font-bold text-base active:bg-green-600 transition shadow-md"
+                      >
+                        {currentStepIndex < cookingSteps.length - 1 ? "다음 단계 →" : "조리 완료!"}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="fixed bottom-20 right-4 z-20">
@@ -1450,7 +1679,7 @@ export default function RecommendPage() {
                 <div className="text-center py-8">
                   <div className="text-5xl mb-4">🎉</div>
                   <h1 className="text-2xl font-bold text-slate-900 mb-3">
-                    맛있는 "{selectedRecipe?.name}"이<br />완성되었습니다!
+                    맛있는 &quot;{selectedRecipe?.name}&quot;이<br />완성되었습니다!
                   </h1>
                   <p className="text-sm text-slate-600 mb-6">이 음식을 바로 기록 하시겠습니까?</p>
 
@@ -1506,10 +1735,7 @@ export default function RecommendPage() {
                             {m.dietCards.map((plan, planIdx) => (
                               <button
                                 key={planIdx}
-                                onClick={() => {
-                                  setSelectedDietPlan(plan);
-                                  setDietFlowStep("complete");
-                                }}
+                                onClick={() => selectDietPlan(plan)}
                                 className="w-full text-left bg-white border-2 border-slate-200 rounded-xl p-3 hover:border-green-400 hover:shadow-md transition-all active:scale-[0.98]"
                               >
                                 <div className="flex items-start justify-between mb-2">
@@ -1610,9 +1836,9 @@ export default function RecommendPage() {
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
                   <div className="font-semibold mb-1">💡 이렇게 물어보세요</div>
                   <ul className="list-disc pl-4 space-y-1">
-                    <li>"요즘 고기류를 먹고 싶은데 식단 추천해줘"</li>
-                    <li>"내가 가진 식재료 기반으로 식단 짜줘"</li>
-                    <li>"다이어트용 저칼로리 식단 알려줘"</li>
+                    <li>&quot;요즘 고기류를 먹고 싶은데 식단 추천해줘&quot;</li>
+                    <li>&quot;내가 가진 식재료 기반으로 식단 짜줘&quot;</li>
+                    <li>&quot;다이어트용 저칼로리 식단 알려줘&quot;</li>
                   </ul>
                 </div>
               </div>

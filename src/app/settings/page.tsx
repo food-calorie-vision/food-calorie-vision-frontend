@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
+import { API_BASE_URL } from '@/utils/api';
 
 /* ===== Types ===== */
 type Allergy = { id: string; name: string };
@@ -67,7 +68,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const fetchUserInfo = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/auth/me', {
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
           method: 'GET',
           credentials: 'include',
         });
@@ -215,7 +216,7 @@ export default function SettingsPage() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/auth/logout', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       });
