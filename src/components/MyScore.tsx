@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { translateHealthGoal } from '@/utils/healthGoalTranslator';
 import { ScoreData } from '@/types';
 import { API_BASE_URL } from '@/utils/api';
+import { useSession } from '@/contexts/SessionContext';
 
 interface MyScoreProps {
   userInfo?: any; // 사용자 정보
@@ -14,6 +15,7 @@ interface MyScoreProps {
 const MyScore = ({ userInfo }: MyScoreProps) => {
   const [scoreData, setScoreData] = useState<ScoreData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { isAuthenticated, isCheckingAuth } = useSession();
 
   useEffect(() => {
     const fetchScoreData = async () => {
@@ -80,8 +82,23 @@ const MyScore = ({ userInfo }: MyScoreProps) => {
       }
     };
 
+    if (isCheckingAuth) {
+      return;
+    }
+    if (!isAuthenticated) {
+      setLoading(false);
+      setScoreData({
+        todayScore: 0,
+        previousScore: 0,
+        scoreChange: 0,
+        feedback: "로그인이 필요합니다",
+        improvement: "로그인 후 나의 점수를 확인해보세요",
+      });
+      return;
+    }
+
     fetchScoreData();
-  }, []);
+  }, [isAuthenticated, isCheckingAuth]);
 
   if (loading) {
     return (

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { API_BASE_URL } from '@/utils/api';
 
 type IngredientPrediction = {
   name: string;
@@ -172,8 +173,7 @@ export default function IngredientPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
           credentials: 'include',
         });
         
@@ -287,7 +287,7 @@ export default function IngredientPage() {
     }, 2000); // 2초마다 메시지 변경
 
     try {
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiEndpoint = API_BASE_URL;
       
       // 분석할 이미지 필터링
       const imagesToAnalyze = images.filter(img => !img.predictions && img.file);
@@ -450,8 +450,7 @@ export default function IngredientPage() {
     }
 
     try {
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiEndpoint}/api/v1/ingredients/save`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/ingredients/save`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -491,8 +490,7 @@ export default function IngredientPage() {
     }, 2000);
     
     try {
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${apiEndpoint}/api/v1/ingredients/recommendations`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/ingredients/recommendations`, {
         method: 'GET',
         credentials: 'include',
       });
@@ -535,7 +533,7 @@ export default function IngredientPage() {
   const handleCookingCompletion = async () => {
     if (!selectedFood) return;
 
-    const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiEndpoint = API_BASE_URL;
 
     try {
       const ingredientsResponse = await fetch(`${apiEndpoint}/api/v1/ingredients/my-ingredients`, {
@@ -1327,8 +1325,7 @@ export default function IngredientPage() {
                     }
                     
                     try {
-                      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-                      const response = await fetch(`${apiEndpoint}/api/v1/meals/save-recommended`, {
+                      const response = await fetch(`${API_BASE_URL}/api/v1/meals/save-recommended`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',

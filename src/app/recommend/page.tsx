@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -10,6 +10,7 @@ import { useSession } from "@/contexts/SessionContext";
 import { API_BASE_URL } from "@/utils/api";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import ChatBubble from "@/components/chat/ChatBubble";
+import { useChatSession } from "@/hooks/useChatSession";
 
 type FlowStep = "chat" | "select" | "cooking" | "complete";
 type RecipeAgentActionType =
@@ -18,7 +19,6 @@ type RecipeAgentActionType =
   | "TEXT_ONLY"
   | "INGREDIENT_CHECK"
   | "COOKING_STEPS";
-
 type ChatMessage = { 
   role: "bot" | "user"; 
   text: string;
@@ -224,7 +224,8 @@ const buildStepsFromMarkdown = (markdown?: string | null): CookingStep[] => {
 export default function RecommendPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isAuthenticated, userName, logout, isCheckingAuth } = useSession();
+  const { isAuthenticated, userName, logout, isCheckingAuth, userId } = useSession();
+  const { sessionId } = useChatSession();
   const apiEndpoint = API_BASE_URL;
 
   // URL params에서 tab 읽기 (기본값: recipe)
@@ -338,6 +339,8 @@ export default function RecommendPage() {
     healthGoal?: string;
     healthGoalKr?: string;
   } | null>(null);
+const [contextReady, setContextReady] = useState(false);
+  const [pendingRecipeConfirmation, setPendingRecipeConfirmation] = useState<string | null>(null);
   
   // 모달 상태
   const [showModal, setShowModal] = useState(false);
@@ -364,6 +367,50 @@ export default function RecommendPage() {
     };
   }, [currentTab]);
 
+  // Recommend 탭 진입 시 사용자 컨텍스트 미리 새로고침
+  const refreshChatContext = useCallback(async () => {
+    if (!isAuthenticated || isCheckingAuth) {
+      return;
+    }
+    try {
+      setContextReady(false);
+      const res = await fetch(`${apiEndpoint}/api/v1/chat/context`, {
+        method: "GET",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        console.error("⚠️ 컨텍스트 새로고침 실패:", res.status);
+        return;
+      }
+      await res.json(); // 데이터는 현재 UI에서 직접 사용하지 않음
+      setContextReady(true);
+    } catch (error) {
+      console.error("⚠️ 컨텍스트 새로고침 오류:", error);
+    }
+  }, [apiEndpoint, isAuthenticated, isCheckingAuth]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isCheckingAuth) {
+      return;
+    }
+    refreshChatContext();
+  }, [refreshChatContext, isAuthenticated, isCheckingAuth]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isCheckingAuth || !contextReady) return;
+    const prewarm = async () => {
+      try {
+        await fetch(`${apiEndpoint}/api/v1/chat/prewarm`, {
+          method: "POST",
+          credentials: "include",
+        });
+      } catch (error) {
+        console.error("⚠️ AI 워밍업 실패:", error);
+      }
+    };
+    prewarm();
+  }, [apiEndpoint, contextReady, isAuthenticated, isCheckingAuth]);
+
 
   // 채팅 메시지 자동 스크롤
   useEffect(() => {
@@ -387,6 +434,10 @@ export default function RecommendPage() {
   };
   
   const handleRecipeAgentResponse = (response: RecipeAgentResponse, fallbackUserText: string) => {
+    const safeSuggestions =
+      response.suggestions && response.suggestions.length > 0
+        ? response.suggestions
+        : ["레시피 추천해줘", "다른 질문 있어"];
     if (response.action_type === "CONFIRMATION") {
       setPendingUserRequest(fallbackUserText);
       setShowMealTypeSelection(true);
@@ -399,7 +450,7 @@ export default function RecommendPage() {
           role: "bot",
           text: response.message,
           actionType: response.action_type,
-          suggestions: response.suggestions
+          suggestions: safeSuggestions
         }
       ]);
       return;
@@ -417,7 +468,7 @@ export default function RecommendPage() {
           role: "bot",
           text: response.message,
           actionType: response.action_type,
-          suggestions: response.suggestions
+          suggestions: safeSuggestions
         }
       ]);
       return;
@@ -466,7 +517,7 @@ export default function RecommendPage() {
         text: botMessage,
         recipeCards: recipes,
         actionType: response.action_type,
-        suggestions: response.suggestions
+        suggestions: safeSuggestions
       }
     ]);
   };
@@ -476,13 +527,15 @@ export default function RecommendPage() {
     baseRequest,
     mealType,
     conversationMessages,
+    mode = "clarify",
   }: {
     latestUserMessage: string;
     baseRequest?: string;
     mealType?: string | null;
     conversationMessages: ChatMessage[];
+    mode?: "clarify" | "execute";
   }) => {
-    if (!latestUserMessage) return;
+    if (!latestUserMessage || !sessionId) return null;
     
     setIsLoading(true);
     
@@ -496,47 +549,56 @@ export default function RecommendPage() {
     }, 2000);
     setLoadingStatus({ text: funnyRecipeLoadingMessages[0], seconds: 0 });
     
+    let result: any = null;
+
     try {
-      const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-        credentials: 'include',
-      });
-      
-      if (!authRes.ok) {
+      // API 호출 전 필수 값 확인
+      if (!userId || !sessionId) {
         clearInterval(messageInterval);
-        setMessages((prev) => [
-          ...prev,
-          { role: "bot", text: "⚠️ 로그인이 필요합니다. 로그인 페이지로 이동해주세요." },
-        ]);
         setIsLoading(false);
         setLoadingStatus({ text: "", seconds: 0 });
-        setPendingUserRequest("");
+
+        const errorMsg = !userId ? "사용자 정보를 불러오는 중입니다." : "세션 정보를 초기화하는 중입니다.";
+        console.error("API 호출 중단:", errorMsg);
+        setMessages((prev) => [
+          ...prev,
+          { role: "bot", text: `⚠️ ${errorMsg} 잠시 후 다시 시도해주세요.` },
+        ]);
         return;
       }
       
-      const authData = await authRes.json();
-      const userId = authData.user_id;
-      
-      const conversation_history = buildConversationHistory(conversationMessages);
-      
-      const res = await fetch(`${apiEndpoint}/api/v1/recipes/recommendations?user_id=${userId}`, {
+      const res = await fetch(`${apiEndpoint}/api/v1/chat/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: 'include',
         body: JSON.stringify({
-          user_request: baseRequest || latestUserMessage,
-          conversation_history,
-          meal_type: mealType || null
+          session_id: sessionId,
+          message: baseRequest || latestUserMessage,
+          mode,
         }),
       });
       
-      const result = await res.json();
+      result = await res.json();
       
-      if (result.success && result.data) {
-        handleRecipeAgentResponse(result.data as RecipeAgentResponse, latestUserMessage);
+      if (result.response) {
+        // 백엔드 응답이 문자열화된 JSON일 경우 파싱
+        try {
+          const parsedData = JSON.parse(result.response);
+          handleRecipeAgentResponse(parsedData as RecipeAgentResponse, latestUserMessage);
+        } catch (parseError) {
+          console.error('❌ 레시피 응답 파싱 실패:', parseError, result.response);
+          const fallbackMessage = typeof result.response === 'string'
+            ? result.response
+            : 'AI 응답을 해석할 수 없어요.';
+          setMessages((prev) => [
+            ...prev,
+            { role: "bot", text: fallbackMessage },
+          ]);
+        }
       } else {
         setMessages((prev) => [
           ...prev,
-          { role: "bot", text: `❌ 레시피 추천 실패: ${result.message || '알 수 없는 오류'}` },
+          { role: "bot", text: `❌ 레시피 추천에 실패했습니다: ${result.message || '알 수 없는 오류'}` },
         ]);
       }
     } catch (error) {
@@ -546,13 +608,21 @@ export default function RecommendPage() {
         { role: "bot", text: "❌ 서버와 통신 중 문제가 발생했습니다. 나중에 다시 시도해주세요." },
       ]);
       setPendingUserRequest("");
+      return null;
     } finally {
       clearInterval(messageInterval);
       setIsLoading(false);
       setLoadingStatus({ text: "", seconds: 0 });
     }
+
+    return { needsToolCall: Boolean(result?.needs_tool_call) };
   };
   
+  const affirmativeTokens = ["네", "넵", "예", "응", "어", "좋아요", "좋아", "그래", "그래요", "ok", "ㅇ", "ㅇㅇ"];
+  const negativeTokens = ["아니", "아니요", "아니오", "싫어", "괜찮아", "괜찮아요", "노", "no"];
+
+  const normalizeAnswer = (text: string) => text.replace(/\s+/g, "").toLowerCase();
+
   const processRecipeUserMessage = async (userText: string, baseRequest?: string, mealTypeOverride?: string | null) => {
     const trimmed = userText.trim();
     if (!trimmed) return;
@@ -561,6 +631,50 @@ export default function RecommendPage() {
     setMessages(updatedMessages);
     setPendingUserRequest(null);
     setShowMealTypeSelection(false);
+
+    const normalized = normalizeAnswer(trimmed);
+    const isAffirmative = affirmativeTokens.includes(normalized);
+    const isNegative = negativeTokens.includes(normalized);
+
+    if (pendingRecipeConfirmation) {
+      if (isAffirmative) {
+        const stored = pendingRecipeConfirmation;
+        setPendingRecipeConfirmation(null);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "bot",
+            text: "좋아요! 잠시만 기다려주세요. 레시피를 찾아볼게요.",
+          },
+        ]);
+        await requestRecipeAgentResponse({
+          latestUserMessage: stored,
+          baseRequest: stored,
+          mealType: mealTypeOverride,
+          conversationMessages: [...updatedMessages, { role: "bot", text: "레시피를 준비하는 중입니다." }],
+          mode: "execute",
+        });
+      } else if (isNegative) {
+        setPendingRecipeConfirmation(null);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "bot",
+            text: "알겠습니다. 다른 요청이 있으면 말씀해주세요!",
+          },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "bot",
+            text: "레시피를 보여드릴까요? 네/아니오로 알려주세요 😊",
+            suggestions: ["네, 보여줘", "아니, 괜찮아"],
+          },
+        ]);
+      }
+      return;
+    }
     
     const detectedMealType = mealTypeOverride ?? detectMealTypeFromText(trimmed);
     if (detectedMealType) {
@@ -570,17 +684,26 @@ export default function RecommendPage() {
     setRecommendedRecipes([]);
     setSelectedRecipe(null);
     setHealthWarning("");
+
+    const userMessageCount = messages.filter((m) => m.role === "user").length;
     
-    await requestRecipeAgentResponse({
+    const clarifyResult = await requestRecipeAgentResponse({
       latestUserMessage: trimmed,
       baseRequest: baseRequest || trimmed,
       mealType: detectedMealType,
-      conversationMessages: updatedMessages
+      conversationMessages: updatedMessages,
+      mode: "clarify",
     });
+
+    if (clarifyResult?.needsToolCall) {
+      setPendingRecipeConfirmation(baseRequest || trimmed);
+    } else if (userMessageCount === 0) {
+      setPendingRecipeConfirmation(null);
+    }
   };
 
   const sendChat = async () => {
-    if (!chatInput.trim() || isLoading) return;
+    if (!chatInput.trim() || isLoading || isCheckingAuth || !userId || !sessionId) return;
     
     const userText = chatInput.trim();
     setChatInput("");
@@ -588,11 +711,18 @@ export default function RecommendPage() {
   };
   
   const handleSuggestionClick = async (text: string) => {
-    if (isLoading) return;
+    if (isLoading || isCheckingAuth || !isAuthenticated || !userId || !sessionId) {
+      console.warn("Suggestion click ignored: Chat is not ready or user not authenticated.");
+      return;
+    }
     await processRecipeUserMessage(text);
   };
 
   const handleMealTypeSelect = async (mealType: string) => {
+    if (isLoading || isCheckingAuth || !isAuthenticated || !userId || !sessionId) {
+      console.warn("Meal type selection ignored: Chat is not ready or user not authenticated.");
+      return;
+    }
     if (!pendingUserRequest) {
       setShowMealTypeSelection(false);
       return;
@@ -620,17 +750,12 @@ export default function RecommendPage() {
     setLoadingRecipeDetail(true);
     
     try {
-      const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-        credentials: 'include',
-      });
-      if (!authRes.ok) {
+      if (!isAuthenticated) {
         setMessages((prev) => [...prev, { role: "bot", text: "⚠️ 로그인이 필요합니다." }]);
         setLoadingRecipeDetail(false);
         return;
       }
-      const authData = await authRes.json();
-      const userId = authData.user_id;
-      const res = await fetch(`${apiEndpoint}/api/v1/recipes/ingredient-check?user_id=${userId}`, {
+      const res = await fetch(`${apiEndpoint}/api/v1/recipes/ingredient-check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: 'include',
@@ -688,17 +813,12 @@ export default function RecommendPage() {
     const excludedIngredients = ingredientChecklistItems.filter((item) => !ingredientChecklistState[item]);
     
     try {
-      const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-        credentials: 'include',
-      });
-      if (!authRes.ok) {
+      if (!isAuthenticated) {
         setMessages((prev) => [...prev, { role: "bot", text: "⚠️ 로그인이 필요합니다." }]);
         setIsGeneratingCookingSteps(false);
         return;
       }
-      const authData = await authRes.json();
-      const userId = authData.user_id;
-      const res = await fetch(`${apiEndpoint}/api/v1/recipes/custom-recipe?user_id=${userId}`, {
+      const res = await fetch(`${apiEndpoint}/api/v1/recipes/custom-recipe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: 'include',
@@ -900,7 +1020,7 @@ export default function RecommendPage() {
 
   // 식단 추천 채팅 보내기
   const sendDietChat = async () => {
-    if (!dietChatInput.trim() || dietLoading) return;
+    if (!dietChatInput.trim() || dietLoading || isCheckingAuth || !userId || !sessionId) return;
 
     const userText = dietChatInput.trim();
     setDietChatInput("");
@@ -921,91 +1041,107 @@ export default function RecommendPage() {
     }, 2000); // 2초마다 메시지 변경
 
     try {
-      // 사용자 인증 확인
-      const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-        credentials: 'include',
-      });
-      
-      if (!authRes.ok) {
+      if (!isAuthenticated) {
         clearInterval(messageInterval);
+        setDietLoading(false);
+        setDietLoadingStatus({ text: "", seconds: 0 });
         setDietMessages((prev) => [
           ...prev,
           { role: "bot", text: "⚠️ 로그인이 필요합니다. 로그인 페이지로 이동해주세요." },
         ]);
+        return;
+      }
+      // user_id와 session_id 체크는 isCheckingAuth 또는 userId, sessionId 자체로 한번 더 걸러지므로, 명시적인 재확인 대신 흐름상 필요한 메시지 추가
+      if (!userId || !sessionId) {
+        clearInterval(messageInterval);
         setDietLoading(false);
         setDietLoadingStatus({ text: "", seconds: 0 });
+        console.error("User ID 또는 Session ID가 호출 시점에 준비되지 않았습니다.");
+        setDietMessages((prev) => [
+          ...prev,
+          { role: "bot", text: "잠시 후 다시 시도해주세요." },
+        ]);
         return;
       }
       
-      const authData = await authRes.json();
-      const userId = authData.user_id;
-      
       // 실제 백엔드 API 호출
-      const res = await fetch(`${apiEndpoint}/api/v1/recommend/diet-plan?user_id=${userId}`, {
+      const res = await fetch(`${apiEndpoint}/api/v1/chat/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: 'include',
         body: JSON.stringify({ 
-          user_request: userText,
-          activity_level: "moderate"  // TODO: 사용자가 선택하도록 개선
+          session_id: sessionId,
+          message: userText,
+          mode: "execute",
+          // context: {
+          //   current_tab: 'diet',
+          //   activity_level: "moderate" // TODO: 사용자가 선택하도록 개선
+          // }
         }),
       });
 
       const result = await res.json();
 
-      if (result.success && result.data) {
-        const responseData: DietPlanApiResponse = result.data;
-        
-        // API 응답을 프론트엔드 형식으로 변환
-        const rawDietPlans = Array.isArray(responseData.dietPlans) ? responseData.dietPlans : [];
-        const dietPlans: DietPlan[] = rawDietPlans.map((plan) => ({
-          name: plan.name,
-          description: plan.description,
-          totalCalories: plan.totalCalories,
-          meals: {
-            breakfast: plan.meals?.breakfast,
-            lunch: plan.meals?.lunch,
-            dinner: plan.meals?.dinner,
-            snack: plan.meals?.snack
-          },
-          nutrients: plan.nutrients,
-          meal_details: plan.meal_details  // 끼니별 상세 정보 추가
-        }));
-        
-        setRecommendedDietPlans(dietPlans);
-        
-        // 메타데이터 저장 (저장 시 사용)
-        setDietMetadata({
-          bmr: responseData.bmr,
-          tdee: responseData.tdee,
-          targetCalories: responseData.targetCalories,
-          healthGoal: responseData.healthGoal,
-          healthGoalKr: responseData.healthGoalKr
-        });
-        
-        // 봇 응답 메시지 생성
-        const botMessage = `✅ 사용자 정보 바탕으로 추천된 식단 리스트 입니다.
+      if (result.response) {
+        try {
+          const responseData: DietPlanApiResponse = JSON.parse(result.response);
+          
+          // API 응답을 프론트엔드 형식으로 변환
+          const rawDietPlans = Array.isArray(responseData.dietPlans) ? responseData.dietPlans : [];
+          const dietPlans: DietPlan[] = rawDietPlans.map((plan) => ({
+            name: plan.name,
+            description: plan.description,
+            totalCalories: plan.totalCalories,
+            meals: {
+              breakfast: plan.meals?.breakfast,
+              lunch: plan.meals?.lunch,
+              dinner: plan.meals?.dinner,
+              snack: plan.meals?.snack
+            },
+            nutrients: plan.nutrients,
+            meal_details: plan.meal_details  // 끼니별 상세 정보 추가
+          }));
+          
+          setRecommendedDietPlans(dietPlans);
+          
+          // 메타데이터 저장 (저장 시 사용)
+          setDietMetadata({
+            bmr: responseData.bmr,
+            tdee: responseData.tdee,
+            targetCalories: responseData.targetCalories,
+            healthGoal: responseData.healthGoal,
+            healthGoalKr: responseData.healthGoalKr
+          });
+          
+          // 봇 응답 메시지 생성
+          const botMessage = `✅ 사용자 정보 바탕으로 추천된 식단 리스트 입니다.
 
 📊 사용자 영양 정보:
-- 기초대사량(BMR): ${responseData.bmr.toFixed(1)} kcal/day
-- 1일 총 에너지 소비량(TDEE): ${responseData.tdee.toFixed(1)} kcal/day
-- 목표 칼로리: ${responseData.targetCalories.toFixed(1)} kcal/day
-- 건강 목표: ${responseData.healthGoalKr}
+- 기초대사량(BMR): ${(responseData.bmr || 0).toFixed(1)} kcal/day
+- 1일 총 에너지 소비량(TDEE): ${(responseData.tdee || 0).toFixed(1)} kcal/day
+- 목표 칼로리: ${(responseData.targetCalories || 0).toFixed(1)} kcal/day
+- 건강 목표: ${responseData.healthGoalKr || '정보 없음'}
 
 아래에서 원하시는 식단을 선택해주세요! 🍽️`;
-        
-        // 메시지에 식단 카드 포함
-        setDietMessages((prev) => [...prev, { 
-          role: "bot", 
-          text: botMessage,
-          dietCards: dietPlans
-        }]);
-        
-        // dietFlowStep은 'chat' 상태 유지 (대화 중 선택 가능)
+          
+          // 메시지에 식단 카드 포함
+          setDietMessages((prev) => [...prev, { 
+            role: "bot", 
+            text: botMessage,
+            dietCards: dietPlans
+          }]);
+        } catch (parseError) {
+          console.error('❌ 식단 응답 파싱 실패:', parseError, result.response);
+          setDietMessages((prev) => [
+            ...prev,
+            { role: "bot", text: "AI 응답을 해석할 수 없어요. 잠시 후 다시 시도해주세요." },
+          ]);
+        }
       } else {
+        const message = result.message || '알 수 없는 오류';
         setDietMessages((prev) => [
           ...prev,
-          { role: "bot", text: `❌ 식단 추천 실패: ${result.message || '알 수 없는 오류'}` },
+          { role: "bot", text: `❌ 식단 추천 실패: ${message}` },
         ]);
       }
     } catch (error) {
@@ -1078,21 +1214,6 @@ export default function RecommendPage() {
     setIsSaving(true);
 
     try {
-      // 사용자 ID 가져오기
-      const authRes = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
-        credentials: 'include',
-      });
-      
-      if (!authRes.ok) {
-        setModalMessage('⚠️ 로그인이 필요합니다.');
-        setShowModal(true);
-        setIsSaving(false);
-        return;
-      }
-      
-      const authData = await authRes.json();
-      const userId = authData.user_id;
-
       // meal_details가 있으면 실제 칼로리 사용, 없으면 fallback (균등 분배)
       const useMealDetails = selectedDietPlan.meal_details && Object.keys(selectedDietPlan.meal_details).length > 0;
       
@@ -1202,7 +1323,6 @@ export default function RecommendPage() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          user_id: userId,
           diet_plan_name: selectedDietPlan.name,
           description: selectedDietPlan.description,
           // 메타데이터 추가
@@ -1284,7 +1404,14 @@ export default function RecommendPage() {
       </section>
 
       <main className="max-w-md mx-auto px-4 py-4 pb-24">
-        {/* 레시피 추천 탭 */}
+        {(isCheckingAuth || !userId || !sessionId) ? (
+          <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+            <TypingIndicator />
+            <p className="mt-4 text-slate-600">사용자 정보를 안전하게 불러오는 중...</p>
+          </div>
+        ) : (
+          <>
+            {/* 레시피 추천 탭 */}
         {currentTab === "recipe" && (
           <>
             {/* 1단계: 채팅 */}
@@ -1330,7 +1457,8 @@ export default function RecommendPage() {
                                       <button
                                         key={`suggestion-${idx}-${suggestionIdx}`}
                                         onClick={() => handleSuggestionClick(suggestion)}
-                                        className="px-3 py-1 text-xs rounded-full border border-slate-300 bg-white text-slate-600 hover:border-green-400 hover:text-green-600 transition"
+                                        disabled={isLoading || isCheckingAuth || !userId || !sessionId}
+                                        className="px-3 py-1 text-xs rounded-full border border-slate-300 bg-white text-slate-600 hover:border-green-400 hover:text-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                         type="button"
                                       >
                                         {suggestion}
@@ -1358,7 +1486,7 @@ export default function RecommendPage() {
                                     </div>
                                     <button
                                       onClick={handleStartCustomCooking}
-                                      disabled={isGeneratingCookingSteps}
+                                      disabled={isGeneratingCookingSteps || isLoading || isCheckingAuth || !userId || !sessionId}
                                       className="w-full py-2 rounded-lg font-semibold text-sm text-white bg-green-500 active:bg-green-600 disabled:opacity-60"
                                     >
                                       {isGeneratingCookingSteps ? "조리법 준비 중..." : "요리 시작"}
@@ -1371,28 +1499,32 @@ export default function RecommendPage() {
                                   <div className="mt-3 grid grid-cols-2 gap-2">
                                     <button
                                       onClick={() => handleMealTypeSelect('breakfast')}
-                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border-2 border-orange-200 hover:border-orange-400 transition-all active:scale-95"
+                                      disabled={isLoading || isCheckingAuth || !userId || !sessionId}
+                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 border-2 border-orange-200 hover:border-orange-400 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       <div className="text-3xl mb-1">🌅</div>
                                       <div className="text-sm font-bold text-slate-800">아침</div>
                                     </button>
                                     <button
                                       onClick={() => handleMealTypeSelect('lunch')}
-                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-yellow-50 to-yellow-100 hover:from-yellow-100 hover:to-yellow-200 border-2 border-yellow-200 hover:border-yellow-400 transition-all active:scale-95"
+                                      disabled={isLoading || isCheckingAuth || !userId || !sessionId}
+                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-yellow-50 to-yellow-100 hover:from-yellow-100 hover:to-yellow-200 border-2 border-yellow-200 hover:border-yellow-400 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       <div className="text-3xl mb-1">☀️</div>
                                       <div className="text-sm font-bold text-slate-800">점심</div>
                                     </button>
                                     <button
                                       onClick={() => handleMealTypeSelect('dinner')}
-                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 border-2 border-indigo-200 hover:border-indigo-400 transition-all active:scale-95"
+                                      disabled={isLoading || isCheckingAuth || !userId || !sessionId}
+                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 border-2 border-indigo-200 hover:border-indigo-400 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       <div className="text-3xl mb-1">🌙</div>
                                       <div className="text-sm font-bold text-slate-800">저녁</div>
                                     </button>
                                     <button
                                       onClick={() => handleMealTypeSelect('snack')}
-                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-pink-50 to-pink-100 hover:from-pink-100 hover:to-pink-200 border-2 border-pink-200 hover:border-pink-400 transition-all active:scale-95"
+                                      disabled={isLoading || isCheckingAuth || !userId || !sessionId}
+                                      className="py-4 px-3 rounded-xl bg-gradient-to-br from-pink-50 to-pink-100 hover:from-pink-100 hover:to-pink-200 border-2 border-pink-200 hover:border-pink-400 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       <div className="text-3xl mb-1">🍪</div>
                                       <div className="text-sm font-bold text-slate-800">간식</div>
@@ -1489,13 +1621,13 @@ export default function RecommendPage() {
                           sendChat();
                         }
                       }}
-                      disabled={isLoading}
+                      disabled={isLoading || isCheckingAuth || !userId || !sessionId}
                     />
                     <button
                       onClick={sendChat}
-                      disabled={isLoading}
+                      disabled={isLoading || isCheckingAuth || !userId || !sessionId}
                       className={`px-4 py-2 rounded-lg font-medium text-sm transition ${
-                        isLoading
+                        (isLoading || isCheckingAuth || !userId || !sessionId)
                           ? "bg-slate-400 text-white cursor-not-allowed"
                           : "bg-green-500 text-white active:bg-green-600"
                       }`}
@@ -1833,9 +1965,9 @@ export default function RecommendPage() {
                     />
                     <button
                       onClick={sendDietChat}
-                      disabled={dietLoading}
+                      disabled={dietLoading || isCheckingAuth || !userId || !sessionId}
                       className={`px-4 py-2 rounded-lg font-medium text-sm transition ${
-                        dietLoading
+                        (dietLoading || isCheckingAuth || !userId || !sessionId)
                           ? "bg-slate-400 text-white cursor-not-allowed"
                           : "bg-green-500 text-white active:bg-green-600"
                       }`}
@@ -2114,6 +2246,8 @@ export default function RecommendPage() {
                 </div>
               </div>
             )}
+          </>
+        )}
           </>
         )}
       </main>

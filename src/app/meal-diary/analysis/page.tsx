@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import MealPeekSwiper from '@/components/MealPeekSwiper';
 import type { FoodAnalysisResult, FoodCandidate } from '@/types';
+import { API_BASE_URL } from '@/utils/api';
 
 type FoodPrediction = {
   name: string;
@@ -47,7 +48,7 @@ export default function MealDiaryPage() {
   const [selectedMealType, setSelectedMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('lunch');
   const [loadingMessage, setLoadingMessage] = useState<string>('');
 
-  const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const apiEndpoint = API_BASE_URL;
   
   // 재치있는 로딩 메시지 배열
   const funnyLoadingMessages = [

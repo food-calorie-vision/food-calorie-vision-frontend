@@ -6,6 +6,7 @@ import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
 import { ArrowLeft, Send, CheckCircle } from 'lucide-react';
 import { useSession } from '@/contexts/SessionContext';
+import { API_BASE_URL } from '@/utils/api';
 
 const typeOptions = [
   '회원가입/로그인', '오늘의 식사일기', '레시피 검색', '마이페이지', '기타 문의'
@@ -30,8 +31,7 @@ export default function ContactFormPage() {
       if (!isAuthenticated) return;
       
       try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
           credentials: 'include',
         });
 
@@ -60,11 +60,12 @@ export default function ContactFormPage() {
     setSubmitting(true);
     
     try {
-      const res = await fetch('http://localhost:8000/api/v1/customer-service/inquiries', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/customer-service/inquiries`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           user_id: userId,
           nickname,

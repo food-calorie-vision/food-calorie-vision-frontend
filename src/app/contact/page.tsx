@@ -6,6 +6,7 @@ import MobileNav from '@/components/MobileNav';
 import Link from 'next/link';
 import { MessageCircle, Bell, HelpCircle } from 'lucide-react';
 import { useSession } from '@/contexts/SessionContext';
+import { API_BASE_URL } from '@/utils/api';
 
 type Announcement = {
   announcement_id: number;
@@ -31,7 +32,7 @@ export default function ContactPage() {
 
   const fetchAnnouncements = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/customer-service/announcements?limit=4');
+      const res = await fetch(`${API_BASE_URL}/api/v1/customer-service/announcements?limit=4`);
       if (res.ok) {
         const data = await res.json();
         setNotices(data.announcements || []);

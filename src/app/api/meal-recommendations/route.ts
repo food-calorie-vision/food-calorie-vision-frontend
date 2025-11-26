@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { API_BASE_URL } from '@/utils/api';
 
 // 식단 추천 API 엔드포인트 (FastAPI 백엔드로 프록시)
 export async function GET(request: NextRequest) {
   try {
-    const apiEndpoint = process.env.FASTAPI_URL || 'http://localhost:8000';
+    const apiEndpoint = process.env.FASTAPI_URL || API_BASE_URL;
     
     const response = await fetch(`${apiEndpoint}/api/v1/meals/recommendations`, {
       method: 'GET',
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const apiEndpoint = process.env.FASTAPI_URL || 'http://localhost:8000';
+    const apiEndpoint = process.env.FASTAPI_URL || API_BASE_URL;
 
     const response = await fetch(`${apiEndpoint}/api/v1/meals/selection`, {
       method: 'POST',

@@ -6,6 +6,7 @@ import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
 import { ArrowLeft, Eye } from 'lucide-react';
 import { useSession } from '@/contexts/SessionContext';
+import { API_BASE_URL } from '@/utils/api';
 
 type Announcement = {
   announcement_id: number;
@@ -53,7 +54,7 @@ export default function AnnouncementDetailPage() {
       
       if (!alreadyViewed) {
         // 조회수 증가 API 호출
-        const res = await fetch(`http://localhost:8000/api/v1/customer-service/announcements/${id}`);
+        const res = await fetch(`${API_BASE_URL}/api/v1/customer-service/announcements/${id}`);
         if (res.ok) {
           const data = await res.json();
           setAnnouncement(data);
@@ -66,7 +67,7 @@ export default function AnnouncementDetailPage() {
         }
       } else {
         // 이미 조회한 경우 조회수 증가 없이 목록에서 가져오기
-        const res = await fetch('http://localhost:8000/api/v1/customer-service/announcements?limit=20');
+        const res = await fetch(`${API_BASE_URL}/api/v1/customer-service/announcements?limit=20`);
         if (res.ok) {
           const data = await res.json();
           const found = data.announcements.find((a: Announcement) => a.announcement_id === announcementId);
@@ -93,7 +94,7 @@ export default function AnnouncementDetailPage() {
 
   const fetchOtherAnnouncements = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/customer-service/announcements?limit=5');
+      const res = await fetch(`${API_BASE_URL}/api/v1/customer-service/announcements?limit=5`);
       if (res.ok) {
         const data = await res.json();
         // 현재 공지사항 제외
@@ -251,4 +252,3 @@ export default function AnnouncementDetailPage() {
     </div>
   );
 }
-
