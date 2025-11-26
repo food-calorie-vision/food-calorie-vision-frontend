@@ -207,22 +207,71 @@ export default function IngredientPage() {
     );
   }
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    Array.from(files).forEach((file) => {
+  // 이미지 리사이즈 (Roboflow 413 에러 방지 - 1024x1024, 85% 품질)
+  const resizeImage = (file: File): Promise<File> => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const newImage: IngredientImage = {
-          id: Math.random().toString(36).substr(2, 9),
-          url: event.target?.result as string,
-          file: file,
+      reader.onload = (e) => {
+        const img = document.createElement('img'); // HTML img 엘리먼트 생성
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxSize = 1024;
+          
+          if (width > height && width > maxSize) {
+            height = (height * maxSize) / width;
+            width = maxSize;
+          } else if (height > maxSize) {
+            width = (width * maxSize) / height;
+            height = maxSize;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext('2d')?.drawImage(img, 0, 0, width, height);
+          
+          canvas.toBlob((blob) => {
+            if (blob) resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+          }, 'image/jpeg', 0.85);
         };
-        setImages((prev) => [...prev, newImage]);
+        img.src = e.target?.result as string;
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    for (const file of Array.from(files)) {
+      try {
+        const resizedFile = await resizeImage(file);
+        console.log(`이미지 리사이즈: ${file.size} → ${resizedFile.size} bytes`);
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setImages((prev) => [...prev, {
+            id: Math.random().toString(36).substr(2, 9),
+            url: event.target?.result as string,
+            file: resizedFile,
+          }]);
+        };
+        reader.readAsDataURL(resizedFile);
+      } catch (err) {
+        console.error('리사이즈 실패, 원본 사용:', err);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setImages((prev) => [...prev, {
+            id: Math.random().toString(36).substr(2, 9),
+            url: event.target?.result as string,
+            file: file,
+          }]);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
   };
 
   const handleAnalyze = async () => {

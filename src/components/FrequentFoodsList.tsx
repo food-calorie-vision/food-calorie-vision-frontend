@@ -100,7 +100,7 @@ const FrequentFoodsList = () => {
         <div className="space-y-3">
           {mostEatenFoods.map((food, index) => (
             <div 
-              key={food.food_id} 
+              key={`${food.food_id}-${index}`}
               className="p-4 bg-white rounded-xl border-2 border-gray-100 hover:border-green-300 transition-all hover:shadow-md"
             >
               <div className="flex items-center justify-between">
