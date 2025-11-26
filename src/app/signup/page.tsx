@@ -23,13 +23,12 @@ type Step = 1 | 2 | 3;
 
 /** 회원가입 form 데이터 타입 */
 interface SignupFormData {
-  username: string;
   password: string;
   confirmPassword: string;
   /** 이메일 */
   email: string;            
   nickname: string;
-  birthdate: string;
+  age: number | null;
   gender: Gender;
 
   weight: string;
@@ -80,36 +79,32 @@ function Field({ icon, children }: { icon: React.ReactNode; children: React.Reac
   );
 }
 
-/** YYYY/MM/DD or YYYYMMDD → age 계산 */
-function birthToAge(birthStr: string): number | null {
-  const digits = (birthStr || '').replace(/\D/g, '');
-  if (digits.length !== 8) return null;
-
-  const y = Number(digits.slice(0, 4));
-  const m = Number(digits.slice(4, 6));
-  const d = Number(digits.slice(6, 8));
-
-  if (y < 1900 || m < 1 || m > 12 || d < 1 || d > 31) return null;
-
-  const today = new Date();
-  let age = today.getFullYear() - y;
-  if (today.getMonth() + 1 < m || (today.getMonth() + 1 === m && today.getDate() < d)) {
-    age -= 1;
-  }
-  return age >= 0 ? age : null;
-}
+/** Email validation utility */
+const isValidEmail = (email: string) => {
+  return /\S+@\S+\.\S+/.test(email);
+};
 
 export default function SignupPage() {
   const [step, setStep] = useState<Step>(1);
   const [pending, setPending] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [confirmPasswordTouched, setConfirmPasswordTouched] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
+  const [weightTouched, setWeightTouched] = useState(false);
+  const [heightTouched, setHeightTouched] = useState(false);
+  const [allergyTriggersTouched, setAllergyTriggersTouched] = useState(false);
+  const [emailChecked, setEmailChecked] = useState(false);
+  const [emailCheckMessage, setEmailCheckMessage] = useState('');
+  const [emailChecking, setEmailChecking] = useState(false);
 
   const [f, setF] = useState<SignupFormData>({
-    username: '',
     password: '',
     confirmPassword: '',
     email: '',                 
     nickname: '',
-    birthdate: '',
+    age: null,
     gender: '',
 
     weight: '',
@@ -124,18 +119,36 @@ export default function SignupPage() {
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setF((s) => ({ ...s, [name]: value }));
+    if (name === 'age' || name === 'weight' || name === 'height') {
+      setF((s) => ({ ...s, [name]: value === '' ? null : Number(value) }));
+    } else {
+      setF((s) => ({ ...s, [name]: value }));
+      if (name === 'email') {
+        setEmailChecked(false);
+        setEmailCheckMessage('');
+      }
+    }
   };
 
   const canNext1 = useMemo(() => {
-    if (!f.username || !f.password || !f.confirmPassword) return false;
-    if (f.username.trim().length < 2) return false;
+    if (!f.email || !f.password || !f.confirmPassword) return false;
+    if (f.email.trim().length < 2 || !isValidEmail(f.email) || !emailChecked) return false;
     if (f.password.length < 6) return false;
     if (f.password !== f.confirmPassword) return false;
     return true;
   }, [f]);
 
-  /** 빈 값 제거 유틸 */
+  const canNext2 = useMemo(() => {
+    return (
+      f.weight !== null &&
+      !isNaN(Number(f.weight)) &&
+      f.height !== null &&
+      !isNaN(Number(f.height)) &&
+      (f.hasAllergy === 'yes' ? f.allergyTriggers.trim() !== '' : true)
+    );
+  }, [f]);
+
+
   const prune = (obj: Record<string, any>) => {
     const out: Record<string, any> = {};
     Object.entries(obj).forEach(([k, v]) => {
@@ -146,24 +159,57 @@ export default function SignupPage() {
     return out;
   };
 
+  const checkEmailDuplication = async () => {
+    if (emailChecking || !isValidEmail(f.email)) return;
+    setEmailChecking(true);
+    setEmailCheckMessage('');
+    setEmailChecked(false);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/check-email?email=${encodeURIComponent(f.email)}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.available) {
+        setEmailChecked(true);
+        setEmailCheckMessage('사용 가능한 이메일입니다.');
+      } else {
+        setEmailChecked(false);
+        setEmailCheckMessage(data.message || '이미 사용 중인 이메일입니다.');
+      }
+    } catch (e) {
+      console.error(e);
+      setEmailChecked(false);
+      setEmailCheckMessage('이메일 중복 확인 중 오류가 발생했습니다.');
+    } finally {
+      setEmailChecking(false);
+    }
+  };
+
   const submit = async () => {
     if (pending) return;
     setPending(true);
 
     try {
-      const age = birthToAge(f.birthdate);
+
 
       // ▶ 회원가입 API가 받는 필드만 전송
       const payloadRaw = {
-        username: f.username.trim(),
+        username: f.email.trim(),
         password: f.password,
-        nickname: f.nickname.trim() || f.username.trim(),
+        nickname: f.nickname.trim() || f.email.trim(),
         email: f.email?.trim(),        
         gender: f.gender || null,
-        age: age ?? null,
+        age: f.age ?? null,
         weight: f.weight ? parseFloat(f.weight) : null,
         height: f.height ? parseFloat(f.height) : null,
         health_goal: f.healthGoal,
+        allergies: f.allergyTriggers || null,
+        diseases: f.comorbidities || null,
       };
 
       const res = await fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
@@ -177,14 +223,19 @@ export default function SignupPage() {
       try { data = await res.json(); } catch { /* 빈 응답 대비 */ }
 
       if (res.ok && (data?.success ?? true)) {
-        alert('회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.');
-        window.location.href = '/';
+        setModalMessage('🎉 회원가입이 완료되었습니다.\n로그인 페이지로 이동합니다.');
+        setShowModal(true);
+        // alert() 제거
       } else {
-        alert(extractErrorMessage(data));
+        setModalMessage(extractErrorMessage(data));
+        setShowModal(true);
+        // alert() 제거
       }
     } catch (e) {
       console.error(e);
-      alert('회원가입 중 오류가 발생했습니다.');
+      setModalMessage('❌ 회원가입 중 오류가 발생했습니다.');
+      setShowModal(true);
+      // alert() 제거
     } finally {
       setPending(false);
     }
@@ -227,15 +278,35 @@ export default function SignupPage() {
           {/* STEP 1 - 기본정보 */}
           {step === 1 && (
             <div className="space-y-5">
-              {/* 아이디 */}
-              <Field icon={<AtSign className="w-5 h-5" />}>
-                <input
-                  name="username"
-                  placeholder="아이디"
-                  value={f.username}
-                  onChange={onChange}
-                  className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
-                />
+              {/* 이메일(필수)  */}
+              <Field icon={<Mail className="w-5 h-5" />}>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="이메일 (필수)"
+                    value={f.email}
+                    onChange={onChange}
+                    onBlur={() => setEmailTouched(true)}
+                    className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
+                  />
+                  <button
+                    type="button"
+                    onClick={checkEmailDuplication}
+                    disabled={!isValidEmail(f.email) || emailChecking}
+                    className="shrink-0 px-4 py-2 rounded-md bg-emerald-500 text-white font-medium text-sm hover:bg-emerald-600 disabled:bg-slate-300 disabled:cursor-not-allowed"
+                  >
+                    {emailChecking ? '확인 중...' : '중복 확인'}
+                  </button>
+                </div>
+                {emailTouched && !isValidEmail(f.email) && (
+                  <p className="text-red-500 text-xs mt-1">유효한 이메일 형식이 아닙니다.</p>
+                )}
+                {emailCheckMessage && (
+                  <p className={`text-xs mt-1 ${emailChecked ? 'text-green-500' : 'text-red-500'}`}>
+                    {emailCheckMessage}
+                  </p>
+                )}
               </Field>
 
               {/* 비밀번호 + 확인 */}
@@ -247,30 +318,28 @@ export default function SignupPage() {
                     placeholder="비밀번호 (6자 이상)"
                     value={f.password}
                     onChange={onChange}
+                    onBlur={() => setPasswordTouched(true)}
                     className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
                   />
+                  {passwordTouched && f.password.length < 6 && (
+                    <p className="text-red-500 text-xs mt-1">비밀번호는 최소 6자리 이상입니다.</p>
+                  )}
                   <input
                     type="password"
                     name="confirmPassword"
                     placeholder="비밀번호 확인"
                     value={f.confirmPassword}
                     onChange={onChange}
+                    onBlur={() => setConfirmPasswordTouched(true)}
                     className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
                   />
+                  {confirmPasswordTouched && f.password !== f.confirmPassword && (
+                    <p className="text-red-500 text-xs mt-1">비밀번호가 일치하지 않습니다.</p>
+                  )}
                 </div>
               </Field>
 
-              {/* 이메일(필수)  */}
-              <Field icon={<Mail className="w-5 h-5" />}>
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="이메일 (필수)"
-                  value={f.email}
-                  onChange={onChange}
-                  className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
-                />
-              </Field>
+
 
               {/* 닉네임 */}
               <Field icon={<User className="w-5 h-5" />}>
@@ -283,14 +352,15 @@ export default function SignupPage() {
                 />
               </Field>
 
-              {/* 생년월일 */}
+              {/* 나이 */}
               <Field icon={<Calendar className="w-5 h-5" />}>
                 <input
-                  name="birthdate"
-                  placeholder="생년월일 8자리 (YYYY/MM/DD)"
-                  value={f.birthdate}
+                  name="age"
+                  placeholder="나이"
+                  value={f.age ?? ''}
                   onChange={onChange}
                   inputMode="numeric"
+                  type="number"
                   className="w-full bg-slate-50/60 rounded-md px-3 py-2 outline-none text-base"
                 />
               </Field>
@@ -317,10 +387,7 @@ export default function SignupPage() {
                 ))}
               </div>
 
-              {/* 안내문 */}
-              <p className="text-xs leading-5 text-emerald-700 pt-2">
-                신분증 상의 이름, 생년월일, 성별과 일치하지 않으면 실명인증이 불가능합니다.
-              </p>
+
             </div>
           )}
 
@@ -339,10 +406,14 @@ export default function SignupPage() {
                         placeholder="체중"
                         value={f.weight}
                         onChange={onChange}
+                        onBlur={() => setWeightTouched(true)}
                         className="w-full bg-slate-50 rounded-md px-3 py-2 outline-none text-base"
                       />
                       <span className="text-sm text-slate-500">kg</span>
                     </div>
+                    {weightTouched && f.weight === null && (
+                      <p className="text-red-500 text-xs mt-1">몸무게를 입력해주세요.</p>
+                    )}
                   </Field>
 
                   <Field icon={<Ruler className="w-5 h-5" />}>
@@ -352,10 +423,14 @@ export default function SignupPage() {
                         placeholder="키"
                         value={f.height}
                         onChange={onChange}
+                        onBlur={() => setHeightTouched(true)}
                         className="w-full bg-slate-50 rounded-md px-3 py-2 outline-none text-base"
                       />
                       <span className="text-sm text-slate-500">cm</span>
                     </div>
+                    {heightTouched && f.height === null && (
+                      <p className="text-red-500 text-xs mt-1">키를 입력해주세요.</p>
+                    )}
                   </Field>
                 </div>
               </div>
@@ -409,7 +484,12 @@ export default function SignupPage() {
                       name="hasAllergy"
                       value="no"
                       checked={f.hasAllergy === 'no'}
-                      onChange={onChange}
+                      onChange={(e) => {
+                        onChange(e);
+                        if (e.target.value === 'no') {
+                          setF((s) => ({ ...s, allergyTriggers: '' }));
+                        }
+                      }}
                     />
                     <span className="text-slate-700 text-sm">없음</span>
                   </label>
@@ -433,9 +513,13 @@ export default function SignupPage() {
                         setF((s) => ({ ...s, hasAllergy: 'yes' }));
                       }
                     }}
+                    onBlur={() => setAllergyTriggersTouched(true)}
                     disabled={f.hasAllergy === 'no'}
-                    className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 outline-none placeholder:text-slate-400 text-base min-h-[100px] resize-y"
+                    className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 outline-none placeholder:text-xs placeholder:text-slate-400 text-base min-h-[100px] resize-y"
                   />
+                  {allergyTriggersTouched && f.hasAllergy === 'yes' && f.allergyTriggers.trim() === '' && (
+                    <p className="text-red-500 text-xs mt-1">보유 알레르기 정보를 입력해주세요.</p>
+                  )}
                 </Field>
               </div>
             </div>
@@ -456,7 +540,7 @@ export default function SignupPage() {
 (예시 - 고혈압, 당뇨)`}
                     value={f.comorbidities}
                     onChange={onChange}
-                    className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 outline-none placeholder:text-slate-400 text-base min-h-[100px] resize-y"
+                    className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 outline-none placeholder:text-xs placeholder:text-slate-400 text-base min-h-[100px] resize-y"
                   />
                 </Field>
               </div>
@@ -475,7 +559,7 @@ export default function SignupPage() {
 2) 옆구리살을 줄이고 싶어요`}
                     value={f.healthGoalNote}
                     onChange={onChange}
-                    className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 outline-none placeholder:text-slate-400 text-base min-h-[120px] resize-y"
+                    className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 outline-none placeholder:text-xs placeholder:text-slate-400 text-base min-h-[120px] resize-y"
                   />
                 </Field>
               </div>
@@ -499,7 +583,7 @@ export default function SignupPage() {
                 <button
                   type="button"
                   onClick={() => setStep((s) => (s + 1) as Step)}
-                  disabled={step === 1 && !canNext1}
+                  disabled={(step === 1 && !canNext1) || (step === 2 && !canNext2)}
                   className={`flex-1 rounded-xl py-3 font-bold shadow ${
                     step === 1 && !canNext1
                       ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
@@ -536,6 +620,25 @@ export default function SignupPage() {
           </Link>
         </div>
       </div>
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="rounded-2xl bg-white p-6 shadow-xl max-w-sm w-full text-center">
+            <p className="text-lg font-medium text-slate-800 whitespace-pre-wrap mb-6">{modalMessage}</p>
+            <button
+              onClick={() => {
+                setShowModal(false);
+                // 회원가입 성공 시에만 홈으로 리다이렉트
+                if (modalMessage.startsWith('🎉')) {
+                  window.location.href = '/';
+                }
+              }}
+              className="w-full rounded-xl bg-emerald-500 py-3 font-bold text-white hover:bg-emerald-600"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
