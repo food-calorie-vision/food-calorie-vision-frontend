@@ -71,6 +71,14 @@ export default function MealPeekSwiper({
     
     // 선택된 음식의 실제 재료 가져오기 (GPT Vision 추출)
     const chosenName = pickedNameById[current.id] ?? nameCandidates[0];
+    
+    console.log('🔍 ingredientsCandidates 디버그:', {
+      currentId: current.id,
+      chosenName: chosenName,
+      pickedNameById: pickedNameById,
+      nameCandidates: nameCandidates
+    });
+    
     if (!chosenName) return [];
     
     const selectedPrediction = current.predictions?.find((p) => p.name === chosenName);
@@ -94,8 +102,23 @@ export default function MealPeekSwiper({
     setPickedNameById((prev) => ({ ...prev, [current.id]: n }));
 
   const confirmName = (name: string) => {
-    setPickedNameById((prev) => ({ ...prev, [current.id]: name }));
-    setPhaseById((prev) => ({ ...prev, [current.id]: 'ingredients' }));
+    console.log('🎯 confirmName 호출:', {
+      selectedName: name,
+      currentId: current?.id,
+      beforeUpdate: pickedNameById
+    });
+    
+    setPickedNameById((prev) => {
+      const updated = { ...prev, [current.id]: name };
+      console.log('📝 pickedNameById 업데이트:', updated);
+      return updated;
+    });
+    
+    setPhaseById((prev) => {
+      const updated = { ...prev, [current.id]: 'ingredients' };
+      console.log('📝 phaseById 업데이트:', updated);
+      return updated;
+    });
   };
 
   const toggleIngredient = (ing: string) =>
@@ -106,10 +129,21 @@ export default function MealPeekSwiper({
     });
 
   const confirmIngredients = () => {
+    const selectedName = pickedNameById[current.id];
+    const finalName = selectedName || nameCandidates[0] || null;
+    
+    console.log('🔍 confirmIngredients 디버그:', {
+      currentImageId: current.id,
+      selectedName: selectedName,
+      finalName: finalName,
+      pickedNameById: pickedNameById,
+      nameCandidates: nameCandidates
+    });
+    
     setPhaseById((prev) => ({ ...prev, [current.id]: 'done' }));
     onConfirmItem?.({
       id: current.id,
-      name: pickedNameById[current.id] ?? nameCandidates[0] ?? null,
+      name: finalName,
       ingredients: pickedIngrById[current.id] ?? [],
     });
     
@@ -264,7 +298,10 @@ export default function MealPeekSwiper({
                   </div>
                   <div className="space-y-2 overflow-y-auto flex-1 pr-1 min-h-0">
                     {current.predictions.slice(0, 3).map((pred, idx) => {
-                      const selected = (pickedNameById[current.id] ?? null) === pred.name;
+                      // pickedNameById에 값이 있으면 우선 사용, 없으면 pred.selected 사용
+                      const selected = pickedNameById[current.id] 
+                        ? pickedNameById[current.id] === pred.name 
+                        : pred.selected;
                       const confidencePercent = (pred.confidence * 100).toFixed(0);
                       const getConfidenceColor = (conf: number) => {
                         if (conf >= 0.8) return 'text-green-600 bg-green-50 border-green-200';
@@ -275,45 +312,33 @@ export default function MealPeekSwiper({
                         <button
                           key={pred.name}
                           onClick={() => {
-                            chooseName(pred.name);
                             confirmName(pred.name);
                           }}
                           className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition ${
-                            idx === 0
-                              ? selected
-                                ? 'bg-green-500 text-white border-green-600 shadow-md'
-                                : 'bg-green-50 text-slate-700 border-green-300 hover:border-green-400'
-                              : selected 
-                                ? 'bg-green-500 text-white border-green-600 shadow-md' 
-                                : 'bg-white text-slate-700 border-slate-200 hover:border-green-300 active:bg-slate-50'
+                            selected
+                              ? 'bg-green-50 text-slate-700 border-green-400 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-200 hover:border-green-300 active:bg-slate-50'
                           }`}
                         >
                           <div className="flex items-center gap-2">
-                            {!selected && (
-                              <span className={`font-bold ${
-                                idx === 0 ? 'text-green-600' : idx === 1 ? 'text-blue-600' : 'text-purple-600'
-                              }`}>
-                                {idx + 1}순위
-                              </span>
-                            )}
-                            <span className={`font-medium text-base ${idx === 0 && !selected ? 'text-green-700' : ''}`}>
+                            <span className={`font-bold ${
+                              idx === 0 ? 'text-green-600' : idx === 1 ? 'text-blue-600' : 'text-purple-600'
+                            }`}>
+                              {idx + 1}순위
+                            </span>
+                            <span className="font-medium text-base">
                               {pred.name}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            {!selected && (
-                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
-                                idx === 0 ? 'text-green-700 bg-green-100 border-green-300' : getConfidenceColor(pred.confidence)
-                              }`}>
-                                정확도 {confidencePercent}%
-                              </span>
-                            )}
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                              getConfidenceColor(pred.confidence)
+                            }`}>
+                              정확도 {confidencePercent}%
+                            </span>
                             {selected && (
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-medium opacity-90">{confidencePercent}%</span>
-                                <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center">
-                                  <span className="text-green-500 text-sm font-bold">✓</span>
-                                </div>
+                              <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                                <span className="text-white text-sm font-bold">✓</span>
                               </div>
                             )}
                           </div>
@@ -401,6 +426,10 @@ export default function MealPeekSwiper({
               {current.predictions && phase === 'ingredients' && (
                 <div className="flex flex-col h-full">
                   <div className="flex-shrink-0 mb-3">
+                    <p className="text-sm text-slate-600 mb-1">선택한 음식:</p>
+                    <p className="text-lg font-bold text-green-600 mb-2">
+                      {pickedNameById[current.id] || nameCandidates[0] || '(선택 없음)'}
+                    </p>
                     <p className="text-sm text-slate-600 mb-1">주재료는 아래와 같이 보입니다.</p>
                     <p className="text-sm font-semibold text-slate-900">맞나요?</p>
                   </div>
