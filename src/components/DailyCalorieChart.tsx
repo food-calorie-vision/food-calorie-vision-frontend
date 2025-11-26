@@ -5,6 +5,7 @@ import { Activity } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DailyCalorieData } from '@/types';
 import { API_BASE_URL } from '@/utils/api';
+import { useSession } from '@/contexts/SessionContext';
 
 interface DailyCalorieChartProps {
   userInfo?: any; // 사용자 정보
@@ -16,6 +17,7 @@ const DailyCalorieChart = ({ userInfo }: DailyCalorieChartProps) => {
   const [targetCalories, setTargetCalories] = useState(2000); // 목표 칼로리
   const [yAxisTicks, setYAxisTicks] = useState<number[]>([]);
   const [yAxisDomain, setYAxisDomain] = useState<[number, number]>([0, 2400]);
+  const { isAuthenticated, isCheckingAuth } = useSession();
 
   // userInfo에서 권장 칼로리 설정
   useEffect(() => {
@@ -93,8 +95,17 @@ const DailyCalorieChart = ({ userInfo }: DailyCalorieChartProps) => {
       }
     };
 
+    if (isCheckingAuth) {
+      return;
+    }
+    if (!isAuthenticated) {
+      setLoading(false);
+      setData([{ date: '로그인이 필요합니다', calories: 0 }]);
+      return;
+    }
+
     fetchCalorieData();
-  }, []);
+  }, [isAuthenticated, isCheckingAuth]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const CustomTooltip = ({ active, payload, label }: any) => {

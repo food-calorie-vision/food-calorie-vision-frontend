@@ -7,6 +7,7 @@ import Link from 'next/link';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
 import { useSession } from '@/contexts/SessionContext';
+import { API_BASE_URL } from '@/utils/api';
 
 interface ScoreDetail {
   overallScore: number;
@@ -34,10 +35,8 @@ export default function ScoreDetailPage() {
   useEffect(() => {
     const fetchScoreDetail = async () => {
       try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        
         // 실제 API에서 상세 점수 데이터를 가져옴
-        const response = await fetch(`${apiEndpoint}/api/v1/meals/score-detail`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/meals/score-detail`, {
           method: 'GET',
           credentials: 'include',
         });

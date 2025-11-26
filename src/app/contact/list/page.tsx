@@ -6,6 +6,7 @@ import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
 import { ArrowLeft, MessageSquare, CheckCircle, Clock } from 'lucide-react';
 import { useSession } from '@/contexts/SessionContext';
+import { API_BASE_URL } from '@/utils/api';
 
 type Inquiry = {
   inquiry_id: number;
@@ -32,8 +33,7 @@ export default function ContactListPage() {
   useEffect(() => {
     const fetchUserId = async () => {
       try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiEndpoint}/api/v1/auth/me`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
           credentials: 'include',
         });
 
@@ -63,7 +63,9 @@ export default function ContactListPage() {
     if (!userId) return;
     
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/customer-service/inquiries?user_id=${userId}`);
+      const res = await fetch(`${API_BASE_URL}/api/v1/customer-service/inquiries?user_id=${userId}`, {
+        credentials: 'include',
+      });
       if (res.ok) {
         const data = await res.json();
         setInquiries(data.inquiries || []);

@@ -8,6 +8,8 @@ interface SessionContextType {
   isAuthenticated: boolean;
   userName: string;
   sessionRemaining: number | null;
+  isCheckingAuth: boolean;
+  userId: string | null;
   checkSession: () => Promise<boolean>;
   refreshSession: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
@@ -23,16 +25,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState('');
   const [sessionRemaining, setSessionRemaining] = useState<number | null>(null);
   const [showExpiredModal, setShowExpiredModal] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true); // Renamed from isChecking
+  const [userId, setUserId] = useState<string | null>(null); // New state variable
 
   const API_URL = API_BASE_URL;
 
   // 세션 체크
   const checkSession = useCallback(async (): Promise<boolean> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 seconds timeout
+
     try {
       const startTime = Date.now();
       const response = await fetch(`${API_URL}/api/v1/auth/me`, {
         credentials: 'include',
+        signal: controller.signal, // Pass the signal to fetch
       });
       const elapsed = Date.now() - startTime;
 
@@ -41,24 +48,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setIsAuthenticated(true);
         setUserName(data.nickname || data.username || '');
         setSessionRemaining(data.session_remaining || null);
+        setUserId(data.user_id || null); // ADDED: Set userId
         
         const minutes = data.session_remaining ? Math.floor(data.session_remaining / 60) : 0;
         const seconds = data.session_remaining ? data.session_remaining % 60 : 0;
-        console.log(`✅ 세션 체크 성공 (${elapsed}ms) - User: ${data.nickname || data.username}, 남은시간: ${minutes}분 ${seconds}초`);
+        console.log(`✅ 세션 체크 성공 (${elapsed}ms) - User: ${data.nickname || data.username}, 남은시간: ${minutes}분 ${seconds}초, User ID: ${data.user_id}`);
         return true;
       } else {
         setIsAuthenticated(false);
         setUserName('');
         setSessionRemaining(null);
+        setUserId(null); // ADDED: Clear userId on failure
         console.log(`❌ 세션 체크 실패 (${elapsed}ms) - Status: ${response.status}`);
         return false;
       }
     } catch (error) {
-      console.error('❌ 세션 체크 에러:', error);
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        console.error('❌ 세션 체크 에러: 요청 시간 초과 (5초)');
+      } else {
+        console.error('❌ 세션 체크 에러:', error);
+      }
       setIsAuthenticated(false);
       setUserName('');
       setSessionRemaining(null);
+      setUserId(null); // ADDED: Clear userId on error
       return false;
+    } finally {
+      clearTimeout(timeoutId); // Always clear timeout
     }
   }, [API_URL]);
 
@@ -102,7 +118,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (response.ok && data.success) {
         console.log(`✅ 로그인 성공 - User ID: ${data.user_id}`);
         setIsAuthenticated(true);
-        
+        setUserId(data.user_id || null); // Set userId from login response if available
+
         // 사용자 정보 가져오기
         const userResponse = await fetch(`${API_URL}/api/v1/auth/me`, {
           credentials: 'include',
@@ -111,6 +128,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (userResponse.ok) {
           const userData = await userResponse.json();
           setUserName(userData.nickname || userData.username || '');
+          setUserId(userData.user_id || null); // Ensure userId is set here as well from auth/me
           console.log(`👤 사용자 정보 로드 완료 - ${userData.nickname || userData.username}`);
         } else {
           setUserName(data.username || email);
@@ -120,11 +138,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       } else {
         console.log(`❌ 로그인 실패 - ${data.message}`);
         alert(data.message || '이메일 또는 비밀번호가 올바르지 않습니다');
+        setUserId(null); // Clear userId on login failure
         return false;
       }
     } catch (error) {
       console.error('❌ 로그인 에러:', error);
       alert('로그인 중 오류가 발생했습니다.');
+      setUserId(null); // Clear userId on login error
       return false;
     }
   }, [API_URL]);
@@ -144,6 +164,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setIsAuthenticated(false);
       setUserName('');
       setSessionRemaining(null);
+      setUserId(null); // ADDED: Clear userId on logout
       console.log('🔄 로그인 페이지로 이동');
       router.push('/');
     }
@@ -160,7 +181,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const initCheck = async () => {
       // 로그인/회원가입 페이지는 체크 안함
       if (pathname === '/' || pathname === '/login' || pathname === '/signup') {
-        setIsChecking(false);
+        setIsCheckingAuth(false);
         return;
       }
 
@@ -168,7 +189,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!valid && pathname !== '/') {
         handleSessionExpired();
       }
-      setIsChecking(false);
+      setIsCheckingAuth(false);
     };
 
     initCheck();
@@ -187,7 +208,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         console.log(`⚠️ 세션 만료 감지!`);
         handleSessionExpired();
       }
-    }, 10000); // 10초 (테스트용)
+    }, 600000); // 100초 (테스트용)
 
     return () => {
       console.log(`⏰ 세션 체크 타이머 종료`);
@@ -240,7 +261,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [pathname, isAuthenticated, refreshSession]);
 
   // 로딩 중
-  if (isChecking && pathname !== '/' && pathname !== '/login' && pathname !== '/signup') {
+  if (isCheckingAuth && pathname !== '/' && pathname !== '/login' && pathname !== '/signup') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex items-center justify-center">
         <div className="text-center">
@@ -252,7 +273,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SessionContext.Provider value={{ isAuthenticated, userName, sessionRemaining, checkSession, refreshSession, login, logout }}>
+    <SessionContext.Provider value={{ isAuthenticated, userName, sessionRemaining, isCheckingAuth, userId, checkSession, refreshSession, login, logout }}>
       {children}
 
       {/* 세션 만료 모달 */}

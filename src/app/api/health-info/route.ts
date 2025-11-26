@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import { API_BASE_URL } from '@/utils/api';
 
 // FastAPI 백엔드로 프록시
 export async function GET() {
   try {
-    const apiEndpoint = process.env.FASTAPI_URL || 'http://localhost:8000';
+    const apiEndpoint = process.env.FASTAPI_URL || API_BASE_URL;
     
     const response = await fetch(`${apiEndpoint}/api/v1/user/health-info`, {
       method: 'GET',

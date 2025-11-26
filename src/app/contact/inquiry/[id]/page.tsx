@@ -6,6 +6,7 @@ import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
 import { ArrowLeft, CheckCircle, Clock, MessageSquare } from 'lucide-react';
 import { useSession } from '@/contexts/SessionContext';
+import { API_BASE_URL } from '@/utils/api';
 
 type Inquiry = {
   inquiry_id: number;
@@ -39,7 +40,9 @@ export default function InquiryDetailPage() {
 
   const fetchInquiry = async () => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/customer-service/inquiries/${id}`);
+      const res = await fetch(`${API_BASE_URL}/api/v1/customer-service/inquiries/${id}`, {
+        credentials: 'include',
+      });
       if (res.ok) {
         const data = await res.json();
         setInquiry(data);
@@ -207,4 +210,3 @@ export default function InquiryDetailPage() {
     </div>
   );
 }
-

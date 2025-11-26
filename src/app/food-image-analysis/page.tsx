@@ -6,6 +6,7 @@ import { Upload, Search, Image as ImageIcon, X, Loader2 } from 'lucide-react';
 import Header from '@/components/Header';
 import { FoodAnalysisResult } from '@/types';
 import { useSession } from '@/contexts/SessionContext';
+import { API_BASE_URL } from '@/utils/api';
 
 export default function FoodImageAnalysisPage() {
   const router = useRouter();
@@ -112,8 +113,7 @@ export default function FoodImageAnalysisPage() {
       formData.append('file', uploadedImage);
 
       // 백엔드 API 직접 호출
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const apiUrl = `${apiEndpoint}/api/v1/food/analysis-upload`;
+      const apiUrl = `${API_BASE_URL}/api/v1/food/analysis-upload`;
       
       console.log('📡 API 호출:', apiUrl);
 
@@ -165,10 +165,8 @@ export default function FoodImageAnalysisPage() {
     setIsSaving(true);
 
     try {
-      const apiEndpoint = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      
       // 백엔드 API로 식사 기록 저장
-      const response = await fetch(`${apiEndpoint}/api/v1/meals/save`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/meals/save`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
