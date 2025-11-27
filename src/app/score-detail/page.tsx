@@ -6,8 +6,53 @@ import { ArrowLeft, TrendingUp, TrendingDown, Target } from 'lucide-react';
 import Link from 'next/link';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
+import BadgeShowcase from '@/components/BadgeShowcase'; // Added import
 import { useSession } from '@/contexts/SessionContext';
 import { API_BASE_URL } from '@/utils/api';
+
+// Dummy badge data
+const dummyBadges = [
+  {
+    id: 'badge1',
+    title: '균형의 대가',
+    subtitle: '영양소 균형을 잘 맞췄어요!',
+    icon: '/balance-master.png',
+    status: 'achieved',
+    achievedAt: new Date().toISOString(),
+  },
+  {
+    id: 'badge2',
+    title: '칼로리 헌터',
+    subtitle: '목표 칼로리를 잘 지켰어요!',
+    icon: '/calorie-hunter.png',
+    status: 'pending',
+    achievedAt: null,
+  },
+  {
+    id: 'badge3',
+    title: '수분 챔피언',
+    subtitle: '충분한 수분을 섭취했어요!',
+    icon: '/hydration-champion.png',
+    status: 'locked',
+    achievedAt: null,
+  },
+  {
+    id: 'badge4',
+    title: '소금 수호자',
+    subtitle: '나트륨 섭취를 잘 관리했어요!',
+    icon: '/sodium-guardian.png',
+    status: 'achieved',
+    achievedAt: new Date().toISOString(),
+  },
+  {
+    id: 'badge5',
+    title: '채소 탐험가',
+    subtitle: '다양한 채소를 섭취했어요!',
+    icon: '/vegetable-explorer.png',
+    status: 'pending',
+    achievedAt: null,
+  },
+];
 
 interface ScoreDetail {
   overallScore: number;
@@ -182,6 +227,11 @@ export default function ScoreDetailPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* 뱃지 섹션 추가 */}
+        <div className="mb-6">
+          <BadgeShowcase badges={dummyBadges} variant="scoreDetail" />
         </div>
 
         {/* 카테고리별 점수 */}
