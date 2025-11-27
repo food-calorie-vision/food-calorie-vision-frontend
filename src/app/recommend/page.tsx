@@ -15,6 +15,7 @@ import { useChatSession } from "@/hooks/useChatSession";
 type FlowStep = "chat" | "select" | "cooking" | "complete";
 type RecipeAgentActionType =
   | "CONFIRMATION"
+  | "HEALTH_CONFIRMATION"
   | "RECOMMENDATION_RESULT"
   | "TEXT_ONLY"
   | "INGREDIENT_CHECK"
@@ -24,7 +25,6 @@ type ChatMessage = {
   text: string;
   recipeCards?: Recipe[];
   dietCards?: DietPlan[];
-  healthWarning?: string;
   actionType?: RecipeAgentActionType;
   suggestions?: string[];
   ingredientCheck?: {
@@ -188,6 +188,10 @@ const detectMealTypeFromText = (text: string): string | null => {
   return null;
 };
 
+const recipeConfirmDebug = (...args: unknown[]) => {
+  console.debug("[RecipeConfirm]", ...args);
+};
+
 const buildStepsFromMarkdown = (markdown?: string | null): CookingStep[] => {
   if (!markdown) return [];
   const lines = markdown.split(/\r?\n/);
@@ -289,7 +293,6 @@ export default function RecommendPage() {
   // 레시피 선택 상태
   const [recommendedRecipes, setRecommendedRecipes] = useState<Recipe[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const [healthWarning, setHealthWarning] = useState<string>("");
   
   // 식사 유형 추적
   const [selectedMealType, setSelectedMealType] = useState<string | null>(null);  // 선택된 식사 유형
@@ -341,6 +344,9 @@ export default function RecommendPage() {
   } | null>(null);
 const [contextReady, setContextReady] = useState(false);
   const [pendingRecipeConfirmation, setPendingRecipeConfirmation] = useState<string | null>(null);
+  const [pendingHealthConfirmation, setPendingHealthConfirmation] = useState<string | null>(null);
+  const [healthConfirmationWarning, setHealthConfirmationWarning] = useState<string>("");
+  const [healthConfirmationSuggestions, setHealthConfirmationSuggestions] = useState<string[]>([]);
   
   // 모달 상태
   const [showModal, setShowModal] = useState(false);
@@ -438,12 +444,21 @@ const [contextReady, setContextReady] = useState(false);
       response.suggestions && response.suggestions.length > 0
         ? response.suggestions
         : ["레시피 추천해줘", "다른 질문 있어"];
+    if (response.action_type === "HEALTH_CONFIRMATION") {
+      setPendingUserRequest(null);
+      setPendingRecipeConfirmation(null);
+      setPendingHealthConfirmation(fallbackUserText);
+      setShowMealTypeSelection(false);
+      setHealthConfirmationWarning(response.data?.health_warning || response.message || "건강을 우선할까요?");
+      setHealthConfirmationSuggestions(safeSuggestions);
+      return;
+    }
     if (response.action_type === "CONFIRMATION") {
       setPendingUserRequest(fallbackUserText);
       setShowMealTypeSelection(true);
       setRecommendedRecipes([]);
       setSelectedRecipe(null);
-      setHealthWarning("");
+      setPendingHealthConfirmation(null);
       setMessages((prev) => [
         ...prev,
         {
@@ -461,7 +476,9 @@ const [contextReady, setContextReady] = useState(false);
       setShowMealTypeSelection(false);
       setRecommendedRecipes([]);
       setSelectedRecipe(null);
-      setHealthWarning("");
+      setPendingHealthConfirmation(null);
+      setHealthConfirmationWarning("");
+      setHealthConfirmationSuggestions([]);
       setMessages((prev) => [
         ...prev,
         {
@@ -492,21 +509,11 @@ const [contextReady, setContextReady] = useState(false);
     
     setPendingUserRequest(null);
     setShowMealTypeSelection(false);
+    setPendingHealthConfirmation(null);
+    setHealthConfirmationWarning("");
+    setHealthConfirmationSuggestions([]);
     setRecommendedRecipes(recipes);
     setSelectedRecipe(null);
-    
-    const healthWarn = response.data?.health_warning || "";
-    setHealthWarning(healthWarn);
-    if (healthWarn) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "bot",
-          text: healthWarn,
-          healthWarning: healthWarn
-        }
-      ]);
-    }
     
     const botMessage = response.message || response.data?.user_friendly_message || `✅ "${fallbackUserText}" 관련 레시피를 추천해드릴게요!\n\n아래에서 원하시는 레시피를 선택해주세요! 🍳`;
     
@@ -528,12 +535,14 @@ const [contextReady, setContextReady] = useState(false);
     mealType,
     conversationMessages,
     mode = "clarify",
+    safetyMode,
   }: {
     latestUserMessage: string;
     baseRequest?: string;
     mealType?: string | null;
     conversationMessages: ChatMessage[];
     mode?: "clarify" | "execute";
+    safetyMode?: "proceed" | "health_first";
   }) => {
     if (!latestUserMessage || !sessionId) return null;
     
@@ -567,6 +576,14 @@ const [contextReady, setContextReady] = useState(false);
         return;
       }
       
+      recipeConfirmDebug("Dispatching POST /chat", {
+        sessionId,
+        userId,
+        mode,
+        latestUserMessage,
+        baseRequest,
+        mealType,
+      });
       const res = await fetch(`${apiEndpoint}/api/v1/chat/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -575,10 +592,16 @@ const [contextReady, setContextReady] = useState(false);
           session_id: sessionId,
           message: baseRequest || latestUserMessage,
           mode,
+          safety_mode: safetyMode || null,
         }),
       });
       
       result = await res.json();
+      recipeConfirmDebug("POST /chat settled", {
+        status: res.status,
+        needsToolCall: result?.needs_tool_call,
+        rawResponseType: typeof result?.response,
+      });
       
       if (result.response) {
         // 백엔드 응답이 문자열화된 JSON일 경우 파싱
@@ -615,11 +638,37 @@ const [contextReady, setContextReady] = useState(false);
       setLoadingStatus({ text: "", seconds: 0 });
     }
 
-    return { needsToolCall: Boolean(result?.needs_tool_call) };
+    const responseSummary = { needsToolCall: Boolean(result?.needs_tool_call) };
+    recipeConfirmDebug("requestRecipeAgentResponse completed", responseSummary);
+    return responseSummary;
   };
   
   const affirmativeTokens = ["네", "넵", "예", "응", "어", "좋아요", "좋아", "그래", "그래요", "ok", "ㅇ", "ㅇㅇ"];
   const negativeTokens = ["아니", "아니요", "아니오", "싫어", "괜찮아", "괜찮아요", "노", "no"];
+  const healthProceedTokens = [
+    "그대로진행",
+    "그대로진행해줘",
+    "원래대로",
+    "원래대로진행",
+    "그래도진행",
+    "진행해줘",
+    "그대로가",
+    "그대로",
+    "괜찮아그대로",
+    "그대로부탁해",
+  ];
+  const healthSaferTokens = [
+    "건강하게",
+    "건강하게바꿔줘",
+    "건강우선",
+    "건강위주",
+    "저염으로",
+    "안전하게",
+    "건강하게해줘",
+    "건강하게추천",
+    "조심할래",
+    "조심해서",
+  ];
 
   const normalizeAnswer = (text: string) => text.replace(/\s+/g, "").toLowerCase();
 
@@ -636,10 +685,61 @@ const [contextReady, setContextReady] = useState(false);
     const isAffirmative = affirmativeTokens.includes(normalized);
     const isNegative = negativeTokens.includes(normalized);
 
+    if (pendingHealthConfirmation) {
+      recipeConfirmDebug("Pending health confirmation detected", {
+        reply: trimmed,
+        normalizedReply: normalized,
+      });
+      const storedHealth = pendingHealthConfirmation;
+      const isProceed = healthProceedTokens.includes(normalized);
+      const isHealthFirst = healthSaferTokens.includes(normalized);
+      if (isProceed || isHealthFirst) {
+        setPendingHealthConfirmation(null);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "bot",
+            text: isProceed
+              ? "알겠습니다. 말씀하신 그대로 진행해볼게요!"
+              : "좋아요. 건강을 우선해서 레시피를 찾아볼게요.",
+          },
+        ]);
+        await requestRecipeAgentResponse({
+          latestUserMessage: storedHealth,
+          baseRequest: storedHealth,
+          mealType: mealTypeOverride,
+          conversationMessages: [...updatedMessages, { role: "bot", text: "레시피를 준비하는 중입니다." }],
+          mode: "execute",
+          safetyMode: isProceed ? "proceed" : "health_first",
+        });
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "bot",
+            text: "건강을 우선할지, 원래대로 진행할지 알려주세요 😊",
+            suggestions: ["그대로 진행해줘", "건강하게 바꿔줘"],
+          },
+        ]);
+      }
+      return;
+    }
+
     if (pendingRecipeConfirmation) {
+      recipeConfirmDebug("Pending confirmation detected", {
+        reply: trimmed,
+        normalizedReply: normalized,
+        pendingRecipeConfirmation,
+        isAffirmative,
+        isNegative,
+      });
       if (isAffirmative) {
         const stored = pendingRecipeConfirmation;
         setPendingRecipeConfirmation(null);
+        recipeConfirmDebug("Affirmative reply received, triggering execute mode", {
+          storedRequest: stored,
+          mealTypeOverride,
+        });
         setMessages((prev) => [
           ...prev,
           {
@@ -663,6 +763,7 @@ const [contextReady, setContextReady] = useState(false);
             text: "알겠습니다. 다른 요청이 있으면 말씀해주세요!",
           },
         ]);
+        recipeConfirmDebug("Negative reply received, pending confirmation cleared");
       } else {
         setMessages((prev) => [
           ...prev,
@@ -672,6 +773,7 @@ const [contextReady, setContextReady] = useState(false);
             suggestions: ["네, 보여줘", "아니, 괜찮아"],
           },
         ]);
+        recipeConfirmDebug("Ambiguous reply received while waiting for confirmation");
       }
       return;
     }
@@ -683,8 +785,6 @@ const [contextReady, setContextReady] = useState(false);
     
     setRecommendedRecipes([]);
     setSelectedRecipe(null);
-    setHealthWarning("");
-
     const userMessageCount = messages.filter((m) => m.role === "user").length;
     
     const clarifyResult = await requestRecipeAgentResponse({
@@ -696,6 +796,11 @@ const [contextReady, setContextReady] = useState(false);
     });
 
     if (clarifyResult?.needsToolCall) {
+      recipeConfirmDebug("Clarify result requires user confirmation", {
+        originalMessage: trimmed,
+        baseRequest,
+        detectedMealType,
+      });
       setPendingRecipeConfirmation(baseRequest || trimmed);
     } else if (userMessageCount === 0) {
       setPendingRecipeConfirmation(null);
@@ -992,7 +1097,6 @@ const [contextReady, setContextReady] = useState(false);
     setSelectedRecipe(null);
     setSelectedMealType(null);
     setPendingUserRequest(null);
-    setHealthWarning("");
     setRecipeDetail(null);
     setCookingSteps([]);
     setCurrentStepIndex(-1);
@@ -1432,20 +1536,7 @@ const [contextReady, setContextReady] = useState(false);
                           </ChatBubble>
                         ) : (
                           <>
-                            {m.healthWarning ? (
-                              <ChatBubble role="bot" className="!bg-gradient-to-r !from-red-50 !to-orange-50 !border-red-300 !shadow-sm">
-                                <div className="flex items-start gap-2">
-                                  <div className="text-xl">⚠️</div>
-                                  <div className="flex-1">
-                                    <div className="font-bold text-red-800 mb-1">건강 알림</div>
-                                    <div className="text-red-700 whitespace-pre-line">
-                                      {m.text}
-                                    </div>
-                                  </div>
-                                </div>
-                              </ChatBubble>
-                            ) : (
-                              <ChatBubble role="bot">
+                            <ChatBubble role="bot">
                                 <div className="whitespace-pre-line mb-2">
                                   {m.text}
                                 </div>
@@ -1565,11 +1656,39 @@ const [contextReady, setContextReady] = useState(false);
                                   </div>
                                 )}
                               </ChatBubble>
-                            )}
                           </>
                         )}
                       </div>
                     ))}
+
+                    {pendingHealthConfirmation && healthConfirmationWarning && (
+                      <ChatBubble role="bot" className="!bg-gradient-to-r !from-red-50 !to-orange-50 !border-red-300 !shadow-sm">
+                        <div className="flex items-start gap-2">
+                          <div className="text-xl">⚠️</div>
+                          <div className="flex-1">
+                            <div className="font-bold text-red-800 mb-1">건강 알림</div>
+                            <div className="text-red-700 whitespace-pre-line text-sm">
+                              {healthConfirmationWarning}
+                            </div>
+                          </div>
+                        </div>
+                        {healthConfirmationSuggestions.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {healthConfirmationSuggestions.map((suggestion, suggestionIdx) => (
+                              <button
+                                key={`health-confirm-${suggestionIdx}`}
+                                onClick={() => handleSuggestionClick(suggestion)}
+                                disabled={isLoading || isCheckingAuth || !userId || !sessionId}
+                                className="px-3 py-1 text-xs rounded-full border border-red-200 bg-white text-red-700 hover:border-red-400 hover:text-red-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                type="button"
+                              >
+                                {suggestion}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </ChatBubble>
+                    )}
 
                     {isLoading && (
                       <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-2">
@@ -1656,12 +1775,6 @@ const [contextReady, setContextReady] = useState(false);
                   <h1 className="text-2xl font-bold text-slate-900 mb-2">추천 레시피</h1>
                   <p className="text-sm text-slate-600">사용자 정보를 기반으로 추천된 레시피입니다</p>
                 </div>
-
-                {healthWarning && (
-                  <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4">
-                    <p className="text-xs text-amber-900 whitespace-pre-line leading-relaxed">{healthWarning}</p>
-                  </div>
-                )}
 
                 <div className="space-y-3">
                   {recommendedRecipes.map((recipe, idx) => (
