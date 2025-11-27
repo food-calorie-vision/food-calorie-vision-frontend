@@ -144,7 +144,17 @@ export default function ScoreDetailPage() {
         <div className="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-xl mb-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-slate-700 mb-2">전체 점수</h2>
+              <div className="flex items-center mb-2">
+                <h2 className="text-sm font-semibold text-slate-700">오늘의 종합 점수</h2>
+                <div className="relative group ml-1.5">
+                  <div className="w-3.5 h-3.5 rounded-full bg-green-200 text-green-700 flex items-center justify-center text-[10px] font-bold cursor-help">
+                    ℹ
+                  </div>
+                  <div className="absolute left-0 top-5 w-56 bg-gray-900 text-white text-xs rounded-lg p-2.5 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                    <p className="leading-relaxed">영역별 점수를 종합한 전체 평가 점수입니다</p>
+                  </div>
+                </div>
+              </div>
               <div className="flex items-baseline">
                 <span className="text-4xl font-bold text-green-600">{scoreDetail.overallScore}</span>
                 <span className="text-xl font-bold text-slate-400 ml-1">/100</span>
@@ -176,7 +186,21 @@ export default function ScoreDetailPage() {
 
         {/* 카테고리별 점수 */}
         <div className="mb-6">
-          <h3 className="text-lg font-bold text-slate-900 mb-3">영역별 점수</h3>
+          <div className="flex items-center mb-3">
+            <h3 className="text-lg font-bold text-slate-900">영역별 점수</h3>
+            <div className="relative group ml-2">
+              <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold cursor-help">
+                ℹ
+              </div>
+              <div className="absolute left-0 top-6 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                <p className="font-semibold mb-1">세부 평가 항목</p>
+                <p className="text-gray-300">칼로리, 영양소, 다양성 등 개별 항목별 점수입니다. 이 점수들을 종합하여 오늘의 점수가 계산됩니다.</p>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 mb-3 bg-blue-50 px-3 py-2 rounded-lg">
+            💡 각 영역의 점수를 종합하여 <span className="font-semibold text-blue-700">오늘의 점수</span>가 계산됩니다
+          </p>
           <div className="space-y-3">
             {scoreDetail.categories.map((category, index) => {
               // 점수에 따른 색상 및 상태 결정

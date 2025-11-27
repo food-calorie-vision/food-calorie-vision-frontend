@@ -133,6 +133,17 @@ const MyScore = ({ userInfo }: MyScoreProps) => {
       <div className="flex items-center mb-4">
         <Award className="w-5 h-5 text-green-500 mr-2" />
         <h3 className="text-lg font-semibold text-gray-900">MY SCORE</h3>
+        
+        {/* 툴팁 아이콘 */}
+        <div className="relative group ml-2">
+          <div className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold cursor-help">
+            ℹ
+          </div>
+          <div className="absolute left-0 top-6 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+            <p className="font-semibold mb-1">오늘의 종합 점수</p>
+            <p className="text-gray-300">모든 식사의 칼로리, 영양소, 다양성 등을 종합적으로 평가한 점수입니다.</p>
+          </div>
+        </div>
       </div>
       
       {/* 사용자 건강 목표 표시 */}
@@ -147,7 +158,17 @@ const MyScore = ({ userInfo }: MyScoreProps) => {
       {/* 오늘의 점수 카드 */}
       <div className="bg-green-50 p-6 rounded-lg mb-4">
         <div className="text-center mb-4">
-          <h4 className="text-sm font-medium text-gray-600 mb-2">오늘의 점수</h4>
+          <div className="flex items-center justify-center mb-2">
+            <h4 className="text-sm font-medium text-gray-600">오늘의 점수</h4>
+            <div className="relative group ml-1">
+              <div className="w-3.5 h-3.5 rounded-full bg-green-200 text-green-700 flex items-center justify-center text-[10px] font-bold cursor-help">
+                ℹ
+              </div>
+              <div className="absolute left-1/2 -translate-x-1/2 top-5 w-56 bg-gray-900 text-white text-xs rounded-lg p-2.5 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                <p className="leading-relaxed">모든 식사의 종합 평가 점수입니다</p>
+              </div>
+            </div>
+          </div>
           <div className="flex items-center justify-center">
             <span className="text-4xl font-bold text-green-600">{scoreData.todayScore}</span>
             <span className="text-2xl font-bold text-gray-400 ml-1">/100</span>
