@@ -297,7 +297,7 @@ export default function MealPeekSwiper({
                     )}
                   </div>
                   <div className="space-y-2 overflow-y-auto flex-1 pr-1 min-h-0">
-                    {current.predictions.slice(0, 3).map((pred, idx) => {
+                    {current.predictions.slice(0, 3).map((pred) => {
                       // pickedNameById에 값이 있으면 우선 사용, 없으면 pred.selected 사용
                       const selected = pickedNameById[current.id] 
                         ? pickedNameById[current.id] === pred.name 
@@ -314,27 +314,20 @@ export default function MealPeekSwiper({
                           onClick={() => {
                             confirmName(pred.name);
                           }}
-                          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition ${
+                          className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border-2 transition ${
                             selected
                               ? 'bg-green-50 text-slate-700 border-green-400 shadow-sm'
                               : 'bg-white text-slate-700 border-slate-200 hover:border-green-300 active:bg-slate-50'
                           }`}
                         >
-                          <div className="flex items-center gap-2">
-                            <span className={`font-bold ${
-                              idx === 0 ? 'text-green-600' : idx === 1 ? 'text-blue-600' : 'text-purple-600'
-                            }`}>
-                              {idx + 1}순위
-                            </span>
-                            <span className="font-medium text-base">
-                              {pred.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                          <span className="font-medium text-base flex-1 text-left break-words">
+                            {pred.name}
+                          </span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap ${
                               getConfidenceColor(pred.confidence)
                             }`}>
-                              정확도 {confidencePercent}%
+                              {confidencePercent}%
                             </span>
                             {selected && (
                               <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
