@@ -1,360 +1,551 @@
-# 🥗 KCalculator - AI 기반 음식 칼로리 관리 및 맞춤 식단 추천
+<div align="center">
 
-**GPT-4o Vision**과 **식약처 영양 데이터**를 활용한 지능형 건강 관리 웹 애플리케이션입니다.
+# 🌱 K-Calculator
 
-> 📝 **최신 업데이트 (2024-11-19)**: AI 식단 추천 시스템 추가 (Harris-Benedict 공식 기반)
+### 🥗 AI가 함께하는 똑똑한 건강 여정
 
-## 📋 프로젝트 개요
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=12,15,18,21,24&height=200&section=header&text=K-Calculator&fontSize=70&fontAlignY=35&animation=twinkling&fontColor=fff" />
 
-KCalculator는 사용자의 건강 정보를 기반으로:
-- 🤖 **AI 음식 분석**: GPT-4o Vision으로 음식 사진 자동 분석
-- 🥗 **AI 식단 추천**: 개인 맞춤형 하루 식단 3가지 옵션 제공
-- 🍽️ **재료 레시피**: 냉장고 재료 사진으로 레시피 추천
-- 📊 **영양 추적**: 일일 칼로리 및 영양소 섭취량 관리
-- 💪 **건강 목표 관리**: 증량/유지/감량 목표 설정 및 달성률 추적
-- 📈 **식단 분석**: 7일간 섭취 패턴 및 자주 먹는 음식 분석
+[![GitHub stars](https://img.shields.io/github/stars/food-calorie-vision/food-calorie-vision-frontend?style=for-the-badge&logo=github&color=81c784)](https://github.com/food-calorie-vision/food-calorie-vision-frontend/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/food-calorie-vision/food-calorie-vision-frontend?style=for-the-badge&logo=github&color=66bb6a)](https://github.com/food-calorie-vision/food-calorie-vision-frontend/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/food-calorie-vision/food-calorie-vision-frontend?style=for-the-badge&logo=github&color=4caf50)](https://github.com/food-calorie-vision/food-calorie-vision-frontend/issues)
 
-## 🏗️ 프로젝트 구조
+<br/>
 
-```
-food-calorie-vision-frontend/
-├── src/
-│   ├── app/
-│   │   ├── api/                 # API 라우트
-│   │   │   ├── health-info/     # 건강 정보 API
-│   │   │   ├── intake-data/     # 섭취 현황 API
-│   │   │   └── recommendations/ # 추천 음식 API
-│   │   ├── dashboard/           # 대시보드 페이지
-│   │   ├── customized-diet/     # 맞춤식단 페이지
-│   │   ├── signup/              # 회원가입 페이지
-│   │   ├── layout.tsx           # 루트 레이아웃
-│   │   ├── page.tsx             # 홈/로그인 페이지
-│   │   ├── globals.css          # 전역 스타일
-│   │   └── favicon.ico
-│   ├── components/              # 재사용 가능한 컴포넌트
-│   │   ├── Header.tsx           # 상단 네비게이션
-│   │   ├── NutrientRatioChart.tsx   # 영양 비율 차트
-│   │   ├── CalorieIntakeChart.tsx   # 칼로리 섭취 차트
-│   │   ├── HealthStatus.tsx     # 건강 상태 정보
-│   │   └── RecommendedDiet.tsx  # 추천 식단
-│   ├── types/
-│   │   └── index.ts             # TypeScript 타입 정의
-│   └── public/                  # 정적 파일
-├── package.json
-├── tsconfig.json
-├── tailwind.config.ts
-└── README.md
-```
+**📸 찰칵! 음식을 찍으면 AI가 알려주는 영양 정보**  
+**🤖 GPT-4o가 추천하는 나만의 건강 식단**  
+**🌿 매일매일 성장하는 건강 여정**
 
-## ✨ 주요 기능
+[🚀 시작하기](#-시작하기) • [✨ 주요 기능](#-주요-기능) • [🛠 기술 스택](#-기술-스택) • [👥 팀 소개](#-팀-소개)
 
-### 1. 인증 및 회원가입
-- 이메일 기반 회원가입 (개인정보, 건강정보, 알레르기)
-- 세션 기반 로그인/로그아웃
-- 사용자 프로필 관리
-
-### 2. AI 음식 분석 (GPT-4o Vision) 📸
-- 음식 사진 업로드 → GPT-4o Vision 자동 분석
-- 4개 후보 제공 (1~4순위)
-- 사용자 선택 → 식약처 DB 매칭으로 정확한 영양소 조회
-- 재료 추출 및 저장
-- 음식 일기에 자동 기록
-
-### 3. AI 식단 추천 (GPT-4o) 🥗 ✨ NEW
-- **Harris-Benedict 공식** 기반 칼로리 계산
-  - 기초대사량(BMR) 자동 산출
-  - 1일 총 에너지 소비량(TDEE) 계산
-  - 건강 목표별 목표 칼로리 제시
-- GPT-4o가 **3가지 식단 옵션** 제공
-  - 각 식단: 아침/점심/저녁/간식 구성
-  - 재료 및 칼로리 상세 정보
-  - 영양소 비율 (탄수화물/단백질/지방)
-- 선택한 식단 저장 (DietPlan DB)
-
-### 4. 재료 기반 레시피 추천 🍳
-- 냉장고 재료 사진 촬영
-- GPT-4o가 재료 인식 후 레시피 추천
-- 단계별 조리법 제공
-- 건강 점수 및 제안 사항
-
-### 5. 대시보드 📊
-- MY SCORE: 식단 점수 확인 및 상세 분석
-- 일일 칼로리 섭취량 그래프 (7일간 트렌드)
-- 자주 먹는 음식 리스트 (칼로리 및 영양소 정보)
-- 우측 플로팅 액션 버튼 (5개 기능 페이지 이동)
-- 상세 점수 현황 페이지 (영역별 점수 분석)
-
-### 6. 식단 관리
-- 음식 일기 (meal-diary/analysis)
-- 일일 섭취량 기록 및 추적
-- 영양 성분 분석
-- 개인 목표 대비 현황 비교
-
-## 🛠️ 기술 스택
-
-### Frontend
-- **Framework**: Next.js 15.5.6
-- **React**: 19.1.0
-- **Language**: TypeScript 5
-- **Styling**: Tailwind CSS 4
-- **Charts**: Recharts 3.3.0
-- **Icons**: lucide-react 0.546.0
-
-### Tools
-- **Build Tool**: Turbopack
-- **Linting**: ESLint 9
-- **Package Manager**: npm
-
-## 🚀 시작하기
-
-### 필수 요구사항
-- Node.js 18.0 이상
-- npm 또는 yarn
-
-### 설치 및 실행
-
-```bash
-# 1. 프로젝트 디렉토리로 이동
-cd food-calorie-vision-frontend
-
-# 2. 의존성 설치
-npm install
-
-# 3. 개발 서버 실행
-npm run dev
-
-# 4. 브라우저에서 확인
-# http://localhost:3000
-```
-
-## 📦 빌드 및 배포
-
-```bash
-# 프로덕션 빌드
-npm run build
-
-# 프로덕션 서버 실행
-npm start
-```
-
-## 🔧 API 엔드포인트
-
-### GET /api/health-info
-사용자의 건강 정보를 반환합니다.
-
-**응답 예시:**
-```json
-{
-  "goal": "체중 감량",
-  "diseases": ["고혈압", "고지혈증"],
-  "recommendedCalories": 2000,
-  "activityLevel": "중간"
-}
-```
-
-### GET /api/intake-data
-사용자의 일일 섭취 현황을 반환합니다.
-
-**응답 예시:**
-```json
-{
-  "totalCalories": 1850,
-  "targetCalories": 2000,
-  "nutrients": {
-    "sodium": 1200,
-    "carbs": 180,
-    "protein": 85,
-    "fat": 45,
-    "sugar": 30
-  }
-}
-```
-
-### GET /api/recommendations
-추천 음식 목록을 반환합니다.
-
-**응답 예시:**
-```json
-[
-  {
-    "id": 1,
-    "name": "연어 덮밥",
-    "description": "사용자 건강 목표에 따른 추천 메뉴",
-    "calories": 450,
-    "nutrients": {
-      "protein": 35,
-      "carbs": 45,
-      "fat": 12,
-      "sodium": 600
-    }
-  }
-]
-```
-
-## 🎨 페이지 라우팅
-
-| 경로 | 설명 | 상태 |
-|------|------|------|
-| `/` | 홈/로그인 페이지 | ✅ 완료 |
-| `/signup` | 회원가입 페이지 | ✅ 완료 |
-| `/dashboard` | MY PAGE 대시보드 | ✅ 완료 |
-| `/score-detail` | 상세 점수 현황 | ✅ 완료 |
-| `/meal-diary/analysis` | 음식 일기 (AI 분석) | ✅ 완료 |
-| `/recommend` | AI 식단 추천 ✨ NEW | ✅ 완료 |
-| `/health-report` | 건강 리포트 | 🔧 개발 예정 |
-| `/mypage` | 마이페이지 | 🔧 개발 예정 |
-
-## 📝 주요 컴포넌트
-
-### Header
-- 로그인 상태에 따른 네비게이션 표시
-- 현재 페이지 하이라이트
-- 로그인/로그아웃 기능
-
-### MyScore (NEW!)
-- 식단 점수 확인 및 피드백 제공
-- 전날 대비 점수 변화 표시
-- 상세 점수 현황 페이지 이동 기능
-
-### DailyCalorieChart (NEW!)
-- 7일간 일일 칼로리 섭취량 라인 그래프
-- 목표 칼로리 참조선 표시
-- recharts LineChart 사용
-
-### FrequentFoodsList (NEW!)
-- 자주 먹는 음식 4가지 표시
-- 칼로리 및 3대 영양소 정보 제공
-- 그리드 레이아웃으로 깔끔한 표시
-
-### FloatingActionButtons (NEW!)
-- 우측 플로팅 액션 버튼
-- 클릭 시 5개 버튼으로 확장
-- 각 기능 페이지로 이동하는 네비게이션
-
-### CalorieIntakeChart
-- 목표 칼로리 vs 섭취 칼로리 비교 차트
-- recharts BarChart 사용
-
-### NutrientRatioChart
-- 5가지 주요 영양소 비율 표시
-- recharts PieChart 사용
-- 실시간 데이터 반영
-
-### HealthStatus
-- 건강 목표, 질환, 추천 칼로리 정보 표시
-- lucide-react 아이콘 사용
-
-### RecommendedDiet
-- 추천 음식 목록 표시
-- 음식 선택 기능
-- 선택된 음식 상세 정보 표시
-
-## 🔐 타입 정의
-
-### User
-```typescript
-interface User {
-  id: string;
-  username: string;
-  nickname: string;
-  email?: string;
-}
-```
-
-### SignupFormData
-```typescript
-interface SignupFormData {
-  userId: string;
-  nickname: string;
-  password: string;
-  gender: '남자' | '여자';
-  birthDate: string;
-  hasAllergy: '예' | '아니오';
-  allergyInfo?: string;
-  bodyType: '감량' | '유지' | '증량';
-  medicalCondition?: string;
-  healthGoal: string;
-}
-```
-
-## 📚 개발 가이드
-
-### 새로운 페이지 추가
-
-1. `src/app/[new-page]/page.tsx` 생성
-2. 필요한 컴포넌트 import
-3. metadata 정의
-4. 컴포넌트 구현
-
-### 새로운 컴포넌트 추가
-
-1. `src/components/[ComponentName].tsx` 생성
-2. 'use client' 선언 (필요시)
-3. TypeScript 타입 정의
-4. 컴포넌트 export
-
-### API 라우트 추가
-
-1. `src/app/api/[endpoint]/route.ts` 생성
-2. GET/POST 함수 구현
-3. NextResponse 반환
-
-## 🔗 백엔드 연동
-
-본 프론트엔드는 FastAPI 백엔드와 연동되어 동작합니다.
-
-- **백엔드 저장소**: `food-calorie-vision-backend/`
-- **API Base URL**: `http://localhost:8000/api/v1`
-- **인증 방식**: 세션 기반 (쿠키)
-- **주요 통신**:
-  - 음식 분석: `POST /food/analyze`
-  - 식단 추천: `POST /recommend/diet-plan`
-  - 식단 저장: `POST /recommend/save-diet-plan`
-  - 사용자 정보: `GET /user/health-info`
-
-백엔드 설치 및 실행 방법은 `food-calorie-vision-backend/README.md`를 참고하세요.
-
-## 🚧 개발 현황
-
-### 완료됨 ✅
-- [x] MY PAGE 대시보드 리뉴얼
-- [x] 점수 시스템 및 상세 분석 기능
-- [x] 플로팅 액션 버튼 구현
-- [x] 일일 칼로리 그래프 개선
-- [x] 자주 먹는 음식 리스트 기능
-- [x] 백엔드 API 연동 (FastAPI)
-- [x] 세션 기반 인증 시스템
-- [x] MySQL 데이터베이스 연동
-- [x] GPT-4o Vision 음식 분석
-  - [x] 4개 후보 제공 + 사용자 선택
-  - [x] 식약처 DB 매칭
-  - [x] 음식 일기 자동 기록
-- [x] GPT-4o 재료 레시피 추천
-- [x] GPT-4o AI 식단 추천 시스템
-  - [x] Harris-Benedict 공식 BMR/TDEE 계산
-  - [x] 3가지 식단 옵션 제공
-  - [x] 추천 식단 저장 기능
-  - [x] 식단 목록/상세 조회 API
-
-### 진행 예정 🚧
-- [ ] 저장된 식단 목록 UI 구현
-- [ ] 식단 진행률 추적 (섭취 여부 체크)
-- [ ] 건강 리포트 페이지
-- [ ] NRF9.3 영양 점수 완성
-- [ ] 모바일 반응형 개선
-- [ ] PWA 지원
-- [ ] 알림 기능
-- [ ] 소셜 공유 기능
-
-## 📧 문의 및 지원
-
-문제가 발생하거나 기능 추가 요청이 있으신 경우 이슈를 등록해주세요.
-
-## 📄 라이선스
-
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
+</div>
 
 ---
 
-**마지막 업데이트**: 2024년 11월 19일  
-**버전**: 2.0.0 (AI 식단 추천 시스템 추가)
+<br/>
+
+## 🌟 프로젝트 소개
+
+> *"오늘 뭐 먹었더라? 이거 칼로리가 얼마지?"*  
+> 이런 고민, 이제 그만! 📸
+
+**K-Calculator**는 음식 사진 한 장으로 시작하는 **스마트 건강 관리 서비스**입니다.  
+GPT-4o Vision AI가 음식을 분석하고, 식약처 데이터로 정확한 영양 정보를 제공합니다.
+
+<div align="center">
+
+### 🎯 우리의 미션
+
+```
+🌱 건강한 습관 → 💪 튼튼한 몸 → ✨ 행복한 일상
+```
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+## ✨ 프론트엔드 핵심 기능
+
+<div align="center">
+
+> 🎨 **UI/UX에 집중한 프론트엔드** — 백엔드 API와 연동하여 사용자 경험을 극대화합니다.
+
+<br/>
+
+<table align="center">
+<tr>
+<td align="center" width="25%">
+
+### 📸 사진 업로드 & 분석 UI
+<br/>
+
+드래그앤드롭 / 카메라 촬영  
+실시간 분석 로딩 애니메이션  
+4개 후보 선택 인터페이스
+
+</td>
+<td align="center" width="25%">
+
+### 🍱 식단 추천 화면
+<br/>
+
+3가지 스타일 카드 레이아웃  
+아침/점심/저녁/간식 탭 구성  
+저장 & 즐겨찾기 기능
+
+</td>
+<td align="center" width="25%">
+
+### 📊 대시보드 & 차트
+<br/>
+
+Recharts 기반 7일 칼로리 그래프  
+자주 먹는 음식 TOP5  
+MY SCORE 게이지 시각화
+
+</td>
+<td align="center" width="25%">
+
+### 🏅 뱃지 & 스트릭
+<br/>
+
+뱃지 컬렉션 그리드 뷰  
+연속 기록 캘린더  
+달성률 프로그레스 바
+
+</td>
+</tr>
+</table>
+
+<br/>
+
+#### 🔎 페이지별 기능 맵
+
+| 페이지 | 주요 컴포넌트 | 연동 API |
+|:---:|:---|:---|
+| 🏠 **홈 (로그인)** | 로그인 폼, 소셜 로그인 버튼, 서비스 소개 슬라이드 | `POST /auth/login` |
+| 📝 **회원가입** | 3단계 스텝 폼 (기본정보 → 신체정보 → 건강목표) | `POST /auth/signup` |
+| 📊 **대시보드** | MyScore, DailyCalorieChart, FrequentFoodsList, BadgeShowcase | `GET /user/intake-data`, `GET /meals/dashboard-stats` |
+| 📸 **음식 분석** | 이미지 업로더, 분석 결과 카드, 후보 선택 모달 | `POST /food/analysis-upload` |
+| 🥗 **식단 추천** | 식단 옵션 카드 3장, 상세 영양소 표, 저장 버튼 | `POST /recommend/diet-plan` |
+| 🍳 **레시피 추천** | 재료 입력/사진 업로드, 레시피 카드 리스트 | `POST /ingredients/recommend-recipes` |
+| 🏆 **점수 상세** | 영역별 레이더 차트, 개선 제안 리스트 | `GET /meals/score-detail` |
+| 💬 **고객센터** | 공지사항 아코디언, 문의 작성 폼 | `GET /announcements`, `POST /inquiries` |
+
+<br/>
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+## 🎬 서비스 미리보기
+
+<div align="center">
+
+### 📱 메인 화면
+*로그인, 소개, 오늘의 건강 정보를 한눈에*
+
+<br/>
+
+### 🍽️ 식단 추천
+*목표에 맞는 식단을 3가지 옵션으로 비교 선택*
+
+<br/>
+
+### 📊 대시보드
+*지난 7일 식단 상태와 자주 먹는 음식 요약*
+
+<br/>
+
+> 💡 **Tip:** “기록”은 최소화, “정보”는 최대화되도록 설계했어요. 📈
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+## 🛠 기술 스택
+
+<div align="center">
+
+### Frontend
+<img src="https://img.shields.io/badge/Next.js_15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white"/>
+<img src="https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=black"/>
+<img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white"/>
+<img src="https://img.shields.io/badge/Tailwind_CSS_4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white"/>
+<img src="https://img.shields.io/badge/Recharts-22C55E?style=for-the-badge&logo=chartdotjs&logoColor=white"/>
+
+### Backend
+<img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white"/>
+<img src="https://img.shields.io/badge/Python_3.12-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
+<img src="https://img.shields.io/badge/MySQL-4479A1?style=for-the-badge&logo=mysql&logoColor=white"/>
+
+### AI & Data
+<img src="https://img.shields.io/badge/GPT--4o_Vision-74AA9C?style=for-the-badge&logo=openai&logoColor=white"/>
+<img src="https://img.shields.io/badge/YOLO_11-00FFFF?style=for-the-badge&logo=yolo&logoColor=black"/>
+<img src="https://img.shields.io/badge/식약처_API-4CAF50?style=for-the-badge&logo=databricks&logoColor=white"/>
+
+### Tools
+<img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white"/>
+<img src="https://img.shields.io/badge/Figma-F24E1E?style=for-the-badge&logo=figma&logoColor=white"/>
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+## 🚀 시작하기
+
+<div align="center">
+
+### 🌱 빠른 시작 가이드
+
+</div>
+
+```bash
+# 1️⃣ 저장소 클론
+git clone https://github.com/food-calorie-vision/food-calorie-vision-frontend.git
+
+# 2️⃣ 프로젝트 디렉토리로 이동
+cd food-calorie-vision-frontend
+
+# 3️⃣ 패키지 설치
+npm install
+
+# 4️⃣ 환경 변수 설정
+cp .env.example .env.local
+# .env.local 파일에 백엔드 API URL 설정
+
+# 5️⃣ 개발 서버 실행
+npm run dev
+
+# 6️⃣ 브라우저에서 확인
+# 🌐 http://localhost:3000
+```
+
+<div align="center">
+
+### 🎉 완료! 이제 건강한 여정을 시작하세요!
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+## 📂 프로젝트 구조
+
+```
+🌳 food-calorie-vision-frontend/
+│
+├── 📁 src/
+│   ├── 📁 app/                    # Next.js App Router
+│   │   ├── 📄 page.tsx           # 🏠 홈/로그인
+│   │   ├── 📁 signup/            # 📝 회원가입
+│   │   ├── 📁 dashboard/         # 📊 대시보드
+│   │   ├── 📁 meal-diary/        # 🍽️ 식단 일기
+│   │   │   ├── 📁 analysis/     # 📸 AI 음식 분석
+│   │   │   └── 📁 ingredient/   # 🥕 식재료 입력
+│   │   ├── 📁 recommend/         # 🎯 식단/레시피 추천
+│   │   ├── 📁 score-detail/      # 🏆 상세 점수
+│   │   └── 📁 contact/           # 💬 고객센터
+│   │
+│   ├── 📁 components/             # 재사용 컴포넌트
+│   │   ├── 🎨 MobileHeader.tsx
+│   │   ├── 📊 MyScore.tsx
+│   │   ├── 📈 DailyCalorieChart.tsx
+│   │   ├── 🎯 FrequentFoodsList.tsx
+│   │   ├── 🏅 BadgeShowcase.tsx
+│   │   └── ⚡ FloatingActionButtons.tsx
+│   │
+│   ├── 📁 contexts/               # Context API
+│   │   └── 🔐 SessionContext.tsx
+│   │
+│   ├── 📁 hooks/                  # Custom Hooks
+│   │   └── 💬 useChatSession.ts
+│   │
+│   ├── 📁 types/                  # TypeScript 타입
+│   │   └── 📝 report.d.ts
+│   │
+│   └── 📁 utils/                  # 유틸리티
+│       └── 🔧 api.ts
+│
+├── 📁 public/                     # 정적 파일
+│   └── 🖼️ 뱃지 이미지들
+│
+├── ⚙️ package.json
+├── 🎨 tailwind.config.ts
+├── 📘 tsconfig.json
+└── 📖 README.md                   # 이 파일!
+```
+
+<br/>
+
+---
+
+<br/>
+
+## 🎯 핵심 기능 상세
+
+<details>
+<summary><b>📸 AI 음식 분석 (GPT-4o Vision)</b></summary>
+
+<br/>
+
+### 작동 방식
+
+1. **사진 업로드** 📷  
+   → 음식 사진을 찍거나 업로드
+
+2. **YOLO 객체 탐지** 🎯  
+   → YOLO11-large 모델과 Roboflow 재료 탐지 API로 음식·식재료 위치 파악
+
+3. **GPT Vision 분석** 🤖  
+   → GPT-4o가 음식 종류 4가지 후보 제시
+
+4. **사용자 선택** ✅  
+   → 가장 정확한 음식 선택
+
+5. **영양 정보 제공** 📊  
+   → 식약처 DB 매칭으로 정확한 영양소 정보
+
+### 특징
+- ✨ **4개 후보 제공**으로 높은 정확도
+- 🎯 **식약처 공식 데이터** 기반
+- 💾 **자동 기록**으로 편리함
+
+</details>
+
+<details>
+<summary><b>🍱 AI 식단 추천 (GPT-4o)</b></summary>
+
+<br/>
+
+### 추천 과정
+
+1. **건강 정보 분석** 👤  
+   → 나이, 성별, 체중, 활동량 고려
+
+2. **칼로리 계산** 🧮  
+   → Harris-Benedict 공식으로 BMR/TDEE 산출
+
+3. **목표 설정** 🎯  
+   → 증량/유지/감량 목표에 맞춤
+
+4. **3가지 옵션** 🍽️  
+   → GPT-4o가 아침/점심/저녁/간식 구성
+
+5. **선택 & 저장** 💾  
+   → 마음에 드는 식단 저장
+
+### 특징
+- 🔬 **과학적 계산**으로 신뢰도 UP
+- 🎨 **3가지 스타일** 다양한 선택지
+- 📝 **상세 레시피** 포함
+
+</details>
+
+<details>
+<summary><b>🏅 뱃지 & 성취 시스템</b></summary>
+
+<br/>
+
+### 수집 가능한 뱃지
+
+| 뱃지 | 이름 | 달성 조건 |
+|:---:|:---|:---|
+| 🏃 | **칼로리 헌터** | 목표 칼로리 달성 |
+| 🥬 | **채소 탐험가** | 채소 충분히 섭취 |
+| 💧 | **수분 챔피언** | 물 충분히 마시기 |
+| 🧂 | **나트륨 가디언** | 저염식 실천 |
+| ⚖️ | **밸런스 마스터** | 영양 균형 맞추기 |
+
+### 연속 기록
+- 📅 **스트릭 시스템**으로 매일 동기부여
+- 🔥 **연속 N일 달성** 시 특별 보상
+- 📊 **캘린더 뷰**로 한눈에 확인
+
+</details>
+
+<br/>
+
+---
+
+<br/>
+
+## 📱 주요 페이지 소개
+
+<div align="center">
+
+| 페이지 | 주요 기능 | 상태 |
+|:---:|:---|:---:|
+| 🏠 **홈** | 로그인 & 서비스 소개 | ✅ |
+| 📝 **회원가입** | 3단계 건강 정보 입력 | ✅ |
+| 📊 **대시보드** | MY SCORE, 칼로리 그래프, 자주 먹는 음식 | ✅ |
+| 🍽️ **식단 일기** | 음식 사진 분석 & 기록 | ✅ |
+| 🎯 **식단 추천** | AI 맞춤 식단 & 레시피 | ✅ |
+| 🏆 **점수 상세** | 영역별 점수 분석 | ✅ |
+| 💬 **고객센터** | 공지사항 & 문의하기 | ✅ |
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+## 🎨 디자인 시스템
+
+<div align="center">
+
+### 🌈 컬러 팔레트
+
+```
+🟢 Primary Green    #4CAF50  건강, 신선함
+🟡 Accent Yellow    #FFC107  활력, 에너지
+🔵 Info Blue        #2196F3  신뢰, 안정
+🔴 Warning Red      #FF5252  주의, 강조
+⚪ Background       #FFFFFF  깔끔, 여백
+```
+
+### 🎭 디자인 철학
+
+> *"복잡하지 않게, 예쁘고 귀엽게, 사용하기 쉽게"*
+
+- 🌿 **자연 친화적** 색상과 아이콘
+- 🎨 **직관적인** UI/UX
+- 💚 **따뜻한** 감성 디자인
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+## 👥 팀 소개
+
+<div align="center">
+
+### 🌱 K-Calculator Team
+
+*건강한 세상을 만드는 사람들*
+
+<br/>
+
+| 👤 | 이름 | 역할 | GitHub |
+|:---:|:---:|:---|:---:|
+| 🎨 | **김은진** | Frontend Lead, UI/UX | [@eunjinlo](https://github.com/eunjinlo) |
+| 💻 | **주연석** | Frontend Dev, AI Integration | [@YeonSeok-Joo](https://github.com/YeonSeok-Joo) |
+| 🔧 | **권혁** | Backend Lead, Database | [@Hyuk-CBRN4](https://github.com/Hyuk-CBRN4) |
+| 🤖 | **김준호** | Frontend, Backend, Database | [@Junho](https://github.com/zpzlzmz) |
+
+<br/>
+
+### 💬 한 마디!
+
+> *"매일매일 더 건강해지는 여러분을 응원합니다!"* 🎉
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+## 📊 프로젝트 현황
+
+<div align="center">
+
+### 📈 개발 진행률
+
+```
+██████████████████████████  100% Complete!
+```
+
+| 분류 | 진행률 |
+|:---|:---:|
+| 🎨 Frontend | ██████████████████████ 100% |
+| 🔧 Backend | ██████████████████████ 100% |
+| 🤖 AI Model | ██████████████████████ 100% |
+| 📝 문서화 | ██████████████████████ 100% |
+
+<br/>
+
+### 🎯 마일스톤
+
+- [x] ~~프로젝트 기획 및 설계~~ *(2025.09)*
+- [x] ~~데이터베이스 구축~~ *(2025.10)*
+- [x] ~~AI 모델 개발~~ *(2025.11)*
+- [x] ~~프론트엔드 개발~~ *(2025.11)*
+- [x] ~~백엔드 개발~~ *(2025.11)*
+- [x] ~~통합 테스트~~ *(2025.11)*
+- [ ] 🚀 **서비스 런칭** *(2025.12)*
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+## 🔗 관련 링크
+
+<div align="center">
+
+| 링크 | 설명 |
+|:---:|:---|
+| 🖥️ [Frontend Repo](https://github.com/food-calorie-vision/food-calorie-vision-frontend) | 프론트엔드 저장소 |
+| ⚙️ [Backend Repo](https://github.com/food-calorie-vision/food-calorie-vision-backend) | 백엔드 저장소 |
+| 📚 [API Docs](https://github.com/food-calorie-vision/food-calorie-vision-backend/tree/main/docs) | API 문서 |
+| 🎨 [Figma](https://www.figma.com/) | 디자인 시안 |
+| 📊 [ERD](https://www.erdcloud.com/) | 데이터베이스 설계 |
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+
+## 📧 문의
+
+<div align="center">
+
+### 💌 Contact Us
+
+질문이나 제안사항이 있으신가요?
+
+📧 **Email:** team@k-calculator.com  
+💬 **Issues:** [GitHub Issues](https://github.com/food-calorie-vision/food-calorie-vision-frontend/issues)
+
+<br/>
+
+### 🌟 Star 주시면 힘이 됩니다!
+
+[![Star](https://img.shields.io/github/stars/food-calorie-vision/food-calorie-vision-frontend?style=social)](https://github.com/food-calorie-vision/food-calorie-vision-frontend/stargazers)
+
+</div>
+
+<br/>
+
+---
+
+<br/>
+
+<div align="center">
+
+### 🌱 함께 성장하는 건강한 내일
+
+<br/>
+
+**Made with 💚 by K-Calculator Team**
+
+<br/>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=12,15,18,21,24&height=150&section=footer" />
+
+</div>
+
