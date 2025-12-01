@@ -286,7 +286,7 @@ export default function MealDiaryPage() {
               foodName: selectedPrediction.name,
               mealType: selectedMealType, // 식사 유형 추가
               ingredients: selectedPrediction.ingredients || [],
-              portionSizeG: 100, // 기본값 (나중에 사용자 입력으로 변경 가능)
+              portionSizeG: null, // null로 설정하면 백엔드에서 DB의 unit 값 사용
               // imageRef: null로 설정 (Base64는 너무 커서 DB에 저장 불가)
               // TODO: 추후 S3/CloudFlare 등 파일 스토리지 연동 시 URL 저장
             }),
