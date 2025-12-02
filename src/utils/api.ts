@@ -29,12 +29,21 @@ export function apiFetch(
         const cleanPath = path.startsWith("/") ? path.slice(1) : path;
         
         // 예: "" + "/api/v1/" + "auth/login"  -> "/api/v1/auth/login"
-        // 예: "http://localhost:8000" + "/" + "api/v1/" + "auth/login"
-        url = `${base}${separator}api/v1/${cleanPath}`;
+        // ★ 중요: base가 비어있으면 맨 앞에 '/'가 꼭 붙어야 절대 경로가 됨 (현재 페이지 경로 영향 안 받음)
+        if (!base) {
+           url = `/api/v1/${cleanPath}`;
+        } else {
+           url = `${base}${separator}api/v1/${cleanPath}`;
+        }
     } else {
-        // 이미 prefix가 있거나 base에 포함된 경우 단순 결합
-        const separator = (base && !base.endsWith("/") && !path.startsWith("/")) ? "/" : "";
-        url = `${base}${separator}${path}`;
+        // 이미 prefix가 있거나 base에 포함된 경우
+        if (!base) {
+           // base가 없으면 무조건 '/'로 시작하게 보장
+           url = path.startsWith("/") ? path : `/${path}`;
+        } else {
+           const separator = (base && !base.endsWith("/") && !path.startsWith("/")) ? "/" : "";
+           url = `${base}${separator}${path}`;
+        }
     }
   }
     
