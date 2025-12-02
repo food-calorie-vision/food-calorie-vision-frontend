@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { API_BASE_URL } from '@/utils/api';
+import { apiFetch } from '@/utils/api';
 
 interface SessionContextType {
   isAuthenticated: boolean;
@@ -28,8 +28,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true); // Renamed from isChecking
   const [userId, setUserId] = useState<string | null>(null); // New state variable
 
-  const API_URL = API_BASE_URL;
-
   // 세션 체크
   const checkSession = useCallback(async (): Promise<boolean> => {
     const controller = new AbortController();
@@ -37,8 +35,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     try {
       const startTime = Date.now();
-      const response = await fetch(`${API_URL}/api/v1/auth/me`, {
-        credentials: 'include',
+      // apiFetch 사용: 자동으로 /api/v1/auth/me 로 변환됨
+      const response = await apiFetch('/auth/me', {
         signal: controller.signal, // Pass the signal to fetch
       });
       const elapsed = Date.now() - startTime;
@@ -76,16 +74,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } finally {
       clearTimeout(timeoutId); // Always clear timeout
     }
-  }, [API_URL]);
+  }, []);
 
   // 세션 갱신
   const refreshSession = useCallback(async () => {
     if (!isAuthenticated) return;
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/auth/refresh-session`, {
+      // apiFetch 사용
+      const response = await apiFetch('/auth/refresh-session', {
         method: 'POST',
-        credentials: 'include',
       });
       
       if (response.ok) {
@@ -99,17 +97,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('❌ 세션 갱신 에러:', error);
     }
-  }, [API_URL, isAuthenticated]);
+  }, [isAuthenticated]);
 
   // 로그인
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     try {
       console.log(`🔐 로그인 시도 - Email: ${email}`);
       
-      const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+      // apiFetch 사용: 자동으로 /api/v1/auth/login 로 변환됨
+      const response = await apiFetch('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ email, password }),
       });
 
@@ -121,9 +119,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setUserId(data.user_id || null); // Set userId from login response if available
 
         // 사용자 정보 가져오기
-        const userResponse = await fetch(`${API_URL}/api/v1/auth/me`, {
-          credentials: 'include',
-        });
+        const userResponse = await apiFetch('/auth/me');
         
         if (userResponse.ok) {
           const userData = await userResponse.json();
@@ -147,15 +143,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setUserId(null); // Clear userId on login error
       return false;
     }
-  }, [API_URL]);
+  }, []);
 
   // 로그아웃
   const logout = useCallback(async () => {
     try {
       console.log('🚪 로그아웃 시도...');
-      await fetch(`${API_URL}/api/v1/auth/logout`, {
+      // apiFetch 사용
+      await apiFetch('/auth/logout', {
         method: 'POST',
-        credentials: 'include',
       });
       console.log('✅ 로그아웃 성공');
     } catch (error) {
@@ -168,7 +164,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       console.log('🔄 로그인 페이지로 이동');
       router.push('/');
     }
-  }, [API_URL, router]);
+  }, [router]);
 
   // 세션 만료 처리
   const handleSessionExpired = useCallback(() => {
