@@ -56,6 +56,9 @@ const dummyBadges = [
 
 interface ScoreDetail {
   overallScore: number;
+  qualityScore?: number; // 식단 품질 점수
+  quantityScore?: number; // 양적 달성도 점수
+  calorieRatio?: number; // 칼로리 달성률
   previousScore: number;
   scoreChange: number;
   categories: {
@@ -95,6 +98,9 @@ export default function ScoreDetailPage() {
             // API 응답을 프론트엔드 형식으로 변환
             const scoreDetailData: ScoreDetail = {
               overallScore: Math.round(data.overall_score),
+              qualityScore: data.quality_score !== undefined ? Math.round(data.quality_score) : undefined,
+              quantityScore: data.quantity_score !== undefined ? Math.round(data.quantity_score) : undefined,
+              calorieRatio: data.calorie_ratio !== undefined ? data.calorie_ratio : undefined,
               previousScore: data.previous_score ? Math.round(data.previous_score) : 0,
               scoreChange: data.score_change ? Math.round(data.score_change) : 0,
               categories: data.categories.map((cat: any) => ({
@@ -228,6 +234,58 @@ export default function ScoreDetailPage() {
             )}
           </div>
         </div>
+
+        {/* 점수 상세 분석 (종합 점수 계산 원리) */}
+        {scoreDetail.qualityScore !== undefined && scoreDetail.quantityScore !== undefined && (
+          <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center">
+              💡 점수 상세 분석
+              <span className="ml-2 text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded">질(Quality) × 양(Quantity)</span>
+            </h3>
+            
+            <div className="space-y-4">
+              {/* 식단 품질 */}
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="font-semibold text-slate-700">🥗 식단 품질</span>
+                  <span className="text-slate-900 font-bold">{scoreDetail.qualityScore}점</span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-2 mb-1">
+                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${Math.min(100, scoreDetail.qualityScore)}%` }}></div>
+                </div>
+                <p className="text-[10px] text-slate-500">음식 자체의 영양 균형과 건강함</p>
+              </div>
+
+              {/* 섭취 달성도 */}
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="font-semibold text-slate-700">🍽️ 섭취 달성도</span>
+                  <span className="text-slate-900 font-bold">{scoreDetail.quantityScore}점</span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-2 mb-1">
+                  <div 
+                    className={`${scoreDetail.quantityScore >= 80 ? 'bg-green-500' : 'bg-amber-500'} h-2 rounded-full`} 
+                    style={{ width: `${Math.min(100, scoreDetail.quantityScore)}%` }}
+                  ></div>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  목표 칼로리 대비 섭취량 ({scoreDetail.calorieRatio ?? 0}%)
+                  {scoreDetail.quantityScore < 50 && " - 부족해요!"}
+                  {scoreDetail.quantityScore >= 100 && scoreDetail.calorieRatio && scoreDetail.calorieRatio > 120 && " - 과식 주의!"}
+                </p>
+              </div>
+              
+              {/* 계산식 설명 */}
+              <div className="bg-slate-50 p-3 rounded-lg text-center">
+                <p className="text-xs text-slate-600">
+                  <span className="font-bold text-blue-600">{scoreDetail.qualityScore}</span> (품질) 
+                  × <span className="font-bold text-green-600">{((scoreDetail.quantityScore || 0) / 100).toFixed(2)}</span> (양) 
+                  = <span className="font-bold text-slate-900">{scoreDetail.overallScore}점</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 뱃지 섹션 추가 */}
         <div className="mb-6">

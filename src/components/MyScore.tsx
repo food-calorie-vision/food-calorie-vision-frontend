@@ -37,16 +37,23 @@ const MyScore = ({ userInfo }: MyScoreProps) => {
               ? Math.round(result.data.score_change) 
               : null;
             
+            // 백엔드에서 전달된 피드백 사용 (없으면 점수 기반 폴백)
+            const scoreFeedback = result.data.today_score_feedback || (
+              avgScore >= 75 ? "훌륭한 식습관을 유지하고 있어요!" : 
+              avgScore >= 50 ? "좋은 식습관이에요. 조금만 더 노력해봐요!" :
+              "식습관 개선이 필요해요. 건강한 음식을 선택해보세요!"
+            );
+
             setScoreData({
               todayScore: avgScore,
               previousScore: previousScore || 0,
               scoreChange: scoreChange || 0,
-              feedback: avgScore >= 75 ? "훌륭한 식습관을 유지하고 있어요!" : 
-                       avgScore >= 50 ? "좋은 식습관이에요. 조금만 더 노력해봐요!" :
-                       "식습관 개선이 필요해요. 건강한 음식을 선택해보세요!",
-              improvement: avgScore >= 75 ? "현재 패턴을 유지하세요!" :
-                          avgScore >= 50 ? "채소와 단백질을 더 섭취해보세요." :
-                          "가공식품을 줄이고 신선한 재료를 사용해보세요.",
+              feedback: scoreFeedback,
+              improvement: result.data.today_score_feedback ? "상세 점수 현황에서 더 자세한 분석을 확인해보세요!" : (
+                avgScore >= 75 ? "현재 패턴을 유지하세요!" :
+                avgScore >= 50 ? "채소와 단백질을 더 섭취해보세요." :
+                "가공식품을 줄이고 신선한 재료를 사용해보세요."
+              ),
             });
           } else {
             // 데이터 없음
