@@ -1,43 +1,24 @@
+// 배포 및 개발 환경 모두에서 상대 경로(/api/v1)를 사용하면
+// Next.js Rewrites(개발) 또는 Nginx Proxy(배포)가 알아서 백엔드로 연결해줍니다.
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-const LOCAL_BASE_URL = "http://localhost:8000";
-declare global {
-  // eslint-disable-next-line no-var
-  var __fcv_api_fetch_patched__: boolean | undefined;
-}
-
-if (
-  typeof globalThis !== "undefined" &&
-  typeof globalThis.fetch === "function" &&
-  !globalThis.__fcv_api_fetch_patched__
-) {
-  const originalFetch = globalThis.fetch.bind(globalThis);
-  globalThis.__fcv_api_fetch_patched__ = true;
-
-  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    let nextInput = input;
-
-    if (typeof input === "string" && input.startsWith(LOCAL_BASE_URL)) {
-      nextInput = input.replace(LOCAL_BASE_URL, API_BASE_URL);
-    } else if (input instanceof URL && input.href.startsWith(LOCAL_BASE_URL)) {
-      nextInput = new URL(input.href.replace(LOCAL_BASE_URL, API_BASE_URL));
-    }
-
-    return originalFetch(nextInput as RequestInfo | URL, init);
-  };
-}
+  process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
 export function apiFetch(
   path: string,
   options: RequestInit = {},
   opts?: { includeCredentials?: boolean }
 ) {
+  // path가 이미 http로 시작하면 그대로 사용, 아니면 API_BASE_URL과 결합
+  // path가 '/'로 시작하지 않으면 '/' 추가
   const url = path.startsWith("http")
     ? path
     : `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+    
   const includeCredentials = opts?.includeCredentials ?? true;
+  
   return fetch(url, {
+    // 상대 경로 사용 시 credentials: 'include'가 없어도 쿠키가 잘 전송되지만,
+    // 명시적으로 설정하는 것이 안전합니다.
     credentials: includeCredentials ? "include" : options.credentials,
     ...options,
   });
