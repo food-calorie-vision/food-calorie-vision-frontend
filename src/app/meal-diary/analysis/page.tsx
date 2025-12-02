@@ -10,6 +10,7 @@ type FoodPrediction = {
   name: string;
   confidence: number;
   selected: boolean;
+  foodId?: string; // 확정된 Food ID
   // 추가 영양 정보
   description?: string;
   ingredients?: string[];
@@ -32,6 +33,7 @@ type UploadedImage = {
   file?: File; // 실제 파일 객체 저장
   predictions?: FoodPrediction[];
   isReanalyzing?: boolean; // 재분석 중 상태
+  error?: string; // 에러 메시지
 };
 
 export default function MealDiaryPage() {
@@ -184,30 +186,18 @@ export default function MealDiaryPage() {
                   confidence: candidate.confidence,
                   selected: index === 0, // 첫 번째만 선택
                   description: candidate.description || '',
-                  ingredients: candidate.ingredients || [], // 각 후보의 재료 포함!
-                  // 첫 번째 후보만 전체 영양소 정보 포함
-                  ...(index === 0 && {
-                    calories: analysis.calories,
-                    nutrients: analysis.nutrients,
-                    portionSize: analysis.portionSize,
-                    healthScore: analysis.healthScore,
-                    suggestions: analysis.suggestions,
-                  }),
+                  ingredients: candidate.ingredients || [],
+                  // 영양소 정보는 Preview 단계에서 채워짐 (초기값 null/undefined)
                 });
               });
             } else {
-              // 단일 결과만 있는 경우 (레거시 호환)
+              // 단일 결과만 있는 경우
               predictions.push({
                 name: analysis.foodName,
                 confidence: analysis.confidence,
                 selected: true,
                 description: analysis.description,
                 ingredients: analysis.ingredients,
-                calories: analysis.calories,
-                nutrients: analysis.nutrients,
-                portionSize: analysis.portionSize,
-                healthScore: analysis.healthScore,
-                suggestions: analysis.suggestions,
               });
             }
             
@@ -220,14 +210,35 @@ export default function MealDiaryPage() {
           }
         } catch (error) {
           console.error('❌ 이미지 분석 실패:', error);
-          throw error; // 상위 catch로 전달
+          // 에러 발생 시 해당 이미지 객체 그대로 반환 (분석 안 된 상태)
+          // 또는 에러 상태를 표시할 수 있는 플래그 추가 가능
+          return {
+            ...img,
+            error: '분석 실패' 
+          };
         }
       });
 
-      // 모든 분석 완료 대기
-      const analyzedImages = await Promise.all(analysisPromises);
-      setImages(analyzedImages);
-      console.log('🎉 모든 이미지 분석 완료');
+      // 모든 분석 완료 대기 (에러가 발생해도 배열로 반환됨)
+      const results = await Promise.all(analysisPromises);
+      
+      // 분석 성공한 것과 실패한 것 구분
+      const successCount = results.filter(r => r.predictions).length;
+      const failCount = results.filter(r => !r.predictions).length;
+      
+      setImages(results);
+      
+      if (failCount > 0) {
+          if (successCount === 0) {
+              throw new Error('모든 이미지 분석에 실패했습니다.');
+          } else {
+              // 부분 성공
+              setModalMessage(`⚠️ ${failCount}개의 이미지 분석에 실패했습니다.\n다시 시도하거나 직접 입력해주세요.`);
+              setShowModal(true);
+          }
+      }
+      
+      console.log('🎉 분석 종료');
       
       clearInterval(messageInterval);
       setLoadingMessage('');
@@ -272,6 +283,13 @@ export default function MealDiaryPage() {
           console.warn(`이미지 ${img.id}에 선택된 음식이 없습니다.`);
           return { success: false, imageId: img.id };
         }
+        
+        // 영양 정보가 없는 경우 (Preview 실패 등) -> 안전 장치
+        if (!selectedPrediction.foodId || selectedPrediction.calories === undefined) {
+             console.warn(`이미지 ${img.id}의 영양 정보가 불완전합니다.`);
+             // 필요하다면 여기서 한번 더 Preview 호출하거나 에러 처리
+             // return { success: false, imageId: img.id, error: 'Incomplete data' };
+        }
 
         // 음식 저장 API 호출
         try {
@@ -283,12 +301,25 @@ export default function MealDiaryPage() {
             credentials: 'include',
             body: JSON.stringify({
               userId: userId,
+              foodId: selectedPrediction.foodId || `TEMP_${Date.now()}`, // ID가 없으면 임시 생성 (방어 코드)
               foodName: selectedPrediction.name,
-              mealType: selectedMealType, // 식사 유형 추가
+              mealType: selectedMealType,
+              portionSizeG: parseFloat(selectedPrediction.portionSize?.replace('g', '') || '100'),
+              imageRef: null,
+              
+              // 확정된 영양 정보 전송 (재계산 방지)
+              calories: selectedPrediction.calories || 0,
+              protein: selectedPrediction.nutrients?.protein || 0,
+              carbs: selectedPrediction.nutrients?.carbs || 0,
+              fat: selectedPrediction.nutrients?.fat || 0,
+              sodium: selectedPrediction.nutrients?.sodium || 0,
+              fiber: selectedPrediction.nutrients?.fiber || 0,
+              
+              healthScore: selectedPrediction.healthScore || 0,
+              
               ingredients: selectedPrediction.ingredients || [],
-              portionSizeG: null, // null로 설정하면 백엔드에서 DB의 unit 값 사용
-              // imageRef: null로 설정 (Base64는 너무 커서 DB에 저장 불가)
-              // TODO: 추후 S3/CloudFlare 등 파일 스토리지 연동 시 URL 저장
+              foodClass1: "사용자입력", 
+              foodClass2: null
             }),
           });
 
@@ -431,113 +462,92 @@ export default function MealDiaryPage() {
             images={images.map((img) => ({
               ...img,
               predictions: img.predictions?.map((pred) => ({
-                name: pred.name,
-                confidence: pred.confidence,
-                selected: pred.selected,
-                ingredients: pred.ingredients, // GPT Vision이 추출한 재료 전달
+                ...pred, // 모든 속성 복사 (영양 정보 포함)
               })),
             }))}
             onConfirmItem={async (r) => {
-              console.log('확정 결과', r);
+              console.log('확정 결과 (Preview 요청):', r);
               
-              // 선택한 음식명이 1순위가 아닌 경우, API 재호출
-              const targetImage = images.find(img => img.id === r.id);
-              const firstCandidateName = targetImage?.predictions?.[0]?.name;
-              
-              // 직접 입력한 경우 또는 다른 후보를 선택한 경우
-              const isCustomInput = !targetImage?.predictions?.some(p => p.name === r.name);
-              
-              if (r.name && (isCustomInput || r.name !== firstCandidateName)) {
-                if (isCustomInput) {
-                  console.log(`✏️ 사용자가 직접 입력했습니다: ${r.name}`);
-                } else {
-                  console.log(`🔄 사용자가 다른 후보를 선택했습니다: ${r.name}`);
-                }
+              // API 호출: preview-nutrition
+              try {
+                const response = await fetch(`${apiEndpoint}/api/v1/food/preview-nutrition`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  credentials: 'include',
+                  body: JSON.stringify({
+                    foodName: r.name,
+                    ingredients: r.ingredients,
+                    portionText: r.portionText
+                  }),
+                });
                 
-                try {
-                  const response = await fetch(`${apiEndpoint}/api/v1/food/reanalyze-with-selection`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      selectedFoodName: r.name,
-                      ingredients: r.ingredients,
-                    }),
-                  });
+                if (response.ok) {
+                  const result = await response.json();
+                  console.log('✅ 영양 정보 계산 완료:', result);
                   
-                  if (response.ok) {
-                    const result = await response.json();
-                    console.log('✅ 재분석 완료:', result);
+                  if (result.success && result.data) {
+                    const nutritionData = result.data;
                     
-                    // 이미지 predictions 업데이트
-                    if (result.success && result.data?.analysis) {
-                      const analysis = result.data.analysis;
-                      setImages(prev => prev.map(img => {
-                        if (img.id === r.id) {
-                          // 직접 입력한 경우: 새로운 prediction 추가
-                          if (isCustomInput) {
-                            const newPrediction: FoodPrediction = {
-                              name: r.name,
-                              confidence: 1.0,
-                              selected: true,
-                              ingredients: r.ingredients,
-                              calories: analysis.calories,
-                              nutrients: analysis.nutrients,
-                              portionSize: analysis.portionSize,
-                              healthScore: analysis.healthScore,
-                              suggestions: analysis.suggestions,
+                    // 이미지 predictions 업데이트 (영양 정보 채우기)
+                    setImages(prevImages => prevImages.map(img => {
+                      if (img.id === r.id) {
+                        const currentPredictions = img.predictions || [];
+                        const existingPredIndex = currentPredictions.findIndex(p => p.name === r.name);
+                        
+                        let newPredictions: FoodPrediction[] = [];
+                        
+                        if (existingPredIndex !== -1) {
+                            // 기존 항목이 있으면 업데이트
+                            newPredictions = currentPredictions.map((p, idx) => {
+                                if (idx === existingPredIndex) {
+                                    return {
+                                        ...p,
+                                        selected: true,
+                                        calories: nutritionData.calories,
+                                        nutrients: nutritionData.nutrients,
+                                        portionSize: `${nutritionData.portionSizeG}g`,
+                                        healthScore: nutritionData.healthScore,
+                                        foodId: nutritionData.foodId,
+                                        ingredients: r.ingredients // 재료도 최신으로 업데이트
+                                    };
+                                }
+                                return { ...p, selected: false };
+                            });
+                        } else {
+                            // 없으면 새로 추가 (맨 앞에)
+                            const newPred: FoodPrediction = {
+                                name: r.name!,
+                                confidence: 1.0,
+                                selected: true,
+                                ingredients: r.ingredients,
+                                calories: nutritionData.calories,
+                                nutrients: nutritionData.nutrients,
+                                portionSize: `${nutritionData.portionSizeG}g`,
+                                healthScore: nutritionData.healthScore,
+                                foodId: nutritionData.foodId
                             };
-                            
-                            return {
-                              ...img,
-                              predictions: [
-                                newPrediction,
-                                ...(img.predictions?.map(p => ({ ...p, selected: false })) || [])
-                              ],
-                            };
-                          }
-                          
-                          // 기존 후보 선택한 경우: 해당 prediction 업데이트
-                          return {
-                            ...img,
-                            predictions: img.predictions?.map(pred => {
-                              if (pred.name === r.name) {
-                                return {
-                                  ...pred,
-                                  selected: true,
-                                  calories: analysis.calories,
-                                  nutrients: analysis.nutrients,
-                                  portionSize: analysis.portionSize,
-                                  healthScore: analysis.healthScore,
-                                  suggestions: analysis.suggestions,
-                                };
-                              }
-                              return { ...pred, selected: false };
-                            }),
-                          };
+                            newPredictions = [newPred, ...currentPredictions.map(p => ({ ...p, selected: false }))];
                         }
-                        return img;
-                      }));
-                    }
+                        
+                        console.log(`🖼️ 이미지(${img.id}) 업데이트됨:`, newPredictions[0]);
+                        
+                        return {
+                            ...img,
+                            predictions: newPredictions
+                        };
+                      }
+                      return img;
+                    }));
                   }
-                } catch (error) {
-                  console.error('❌ 재분석 실패:', error);
+                } else {
+                    console.error('영양 정보 계산 실패:', await response.text());
+                    alert('영양 정보를 계산하는데 실패했습니다.');
                 }
-              } else {
-                // 1순위를 그대로 선택한 경우: predictions에서 selected 업데이트
-                setImages(prev => prev.map(img => {
-                  if (img.id === r.id) {
-                    return {
-                      ...img,
-                      predictions: img.predictions?.map(pred => ({
-                        ...pred,
-                        selected: pred.name === r.name
-                      })),
-                    };
-                  }
-                  return img;
-                }));
+              } catch (error) {
+                console.error('❌ Preview API 오류:', error);
+                alert('서버와 통신 중 오류가 발생했습니다.');
               }
               
               setCompletedImages((prev) => new Set(prev).add(r.id));

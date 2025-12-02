@@ -164,23 +164,40 @@ export interface FoodCandidate {
 // 식사 유형 타입
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
-// 음식 이미지 분석 결과 타입
+// 음식 이미지 분석 결과 타입 (Vision API 결과)
 export interface FoodAnalysisResult {
   foodName: string;
-  description?: string; // 음식 설명
-  ingredients?: string[]; // 주요 재료 3-4개
+  description?: string;
+  ingredients?: string[];
+  confidence: number;
+  suggestions?: string[];
+  candidates?: FoodCandidate[];
+  // 아래 필드들은 Preview 단계에서 계산되므로 선택적(Optional)으로 변경
+  calories?: number;
+  nutrients?: {
+    protein: number;
+    carbs: number;
+    fat: number;
+    sodium: number;
+    fiber?: number;
+  };
+  portionSize?: string; 
+  healthScore?: number;
+  mealType?: MealType;
+}
+
+// 영양 정보 미리보기 응답 타입 (Preview API 결과)
+export interface PreviewNutritionResponse {
+  foodId: string;
+  foodName: string;
   calories: number;
   nutrients: {
     protein: number;
     carbs: number;
     fat: number;
     sodium: number;
-    fiber?: number; // 식이섬유
+    fiber: number;
   };
-  portionSize?: string; // 1회 제공량
-  healthScore?: number; // 건강 점수 (0-100)
-  confidence: number;
-  suggestions: string[];
-  candidates?: FoodCandidate[]; // 여러 후보 음식 리스트
-  mealType?: MealType; // 식사 유형 (선택사항)
+  portionSizeG: number;
+  healthScore: number;
 }

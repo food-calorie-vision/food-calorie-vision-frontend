@@ -8,6 +8,16 @@ type FoodPrediction = {
   confidence: number;
   selected: boolean;
   ingredients?: string[];
+  calories?: number;
+  nutrients?: {
+    protein: number;
+    carbs: number;
+    fat: number;
+    sodium: number;
+    fiber?: number;
+  };
+  portionSize?: string;
+  healthScore?: number;
 };
 
 type UploadedImage = {
@@ -21,7 +31,7 @@ type Phase = 'name' | 'custom_input' | 'ingredients' | 'done';
 type Props = {
   images: UploadedImage[];
   autoSwipeDelayMs?: number;
-  onConfirmItem?: (r: { id: string; name: string | null; ingredients: string[] }) => void;
+  onConfirmItem?: (r: { id: string; name: string | null; ingredients: string[]; portionText: string }) => void;
   onDeleteImage?: (imageId: string) => void; // 이미지 삭제 콜백
 };
 
@@ -38,18 +48,26 @@ export default function MealPeekSwiper({
   const [phaseById, setPhaseById] = useState<Record<string, Phase>>({});
   const [pickedNameById, setPickedNameById] = useState<Record<string, string | null>>({});
   const [pickedIngrById, setPickedIngrById] = useState<Record<string, string[]>>({});
+  const [quantityById, setQuantityById] = useState<Record<string, string>>({}); // 섭취량 상태 추가
   const [customFoodName, setCustomFoodName] = useState<string>('');
   const [customIngredients, setCustomIngredients] = useState<string>('');
 
   // 이미지 변경 시 초기화
   useEffect(() => {
     const init: Record<string, Phase> = {};
-    images.forEach((img) => (init[img.id] = 'name'));
-    setPhaseById(init);
-    setPickedNameById({});
-    setPickedIngrById({});
-    setIndex(0);
-  }, [images]);
+    images.forEach((img) => {
+      // 이미 완료된 상태라면 유지 (API 호출 후 리렌더링 시 초기화 방지)
+      if (!phaseById[img.id] || phaseById[img.id] !== 'done') {
+        init[img.id] = 'name';
+      } else {
+        init[img.id] = 'done';
+      }
+    });
+    // 기존 상태 병합 (새 이미지 추가 시 기존 상태 유지)
+    setPhaseById(prev => ({ ...init, ...prev }));
+    
+    // 초기 인덱스는 0으로 리셋하지 않음 (사용자가 보고 있던 위치 유지)
+  }, [images.length]); // 이미지 개수가 바뀔 때만 실행
 
   const hasItems = images.length > 0;
   const current = hasItems ? images[wrap(index, images.length)] : undefined;
@@ -71,13 +89,6 @@ export default function MealPeekSwiper({
     
     // 선택된 음식의 실제 재료 가져오기 (GPT Vision 추출)
     const chosenName = pickedNameById[current.id] ?? nameCandidates[0];
-    
-    console.log('🔍 ingredientsCandidates 디버그:', {
-      currentId: current.id,
-      chosenName: chosenName,
-      pickedNameById: pickedNameById,
-      nameCandidates: nameCandidates
-    });
     
     if (!chosenName) return [];
     
@@ -102,23 +113,8 @@ export default function MealPeekSwiper({
     setPickedNameById((prev) => ({ ...prev, [current.id]: n }));
 
   const confirmName = (name: string) => {
-    console.log('🎯 confirmName 호출:', {
-      selectedName: name,
-      currentId: current?.id,
-      beforeUpdate: pickedNameById
-    });
-    
-    setPickedNameById((prev) => {
-      const updated = { ...prev, [current.id]: name };
-      console.log('📝 pickedNameById 업데이트:', updated);
-      return updated;
-    });
-    
-    setPhaseById((prev) => {
-      const updated = { ...prev, [current.id]: 'ingredients' };
-      console.log('📝 phaseById 업데이트:', updated);
-      return updated;
-    });
+    setPickedNameById((prev) => ({ ...prev, [current.id]: name }));
+    setPhaseById((prev) => ({ ...prev, [current.id]: 'ingredients' }));
   };
 
   const toggleIngredient = (ing: string) =>
@@ -128,23 +124,24 @@ export default function MealPeekSwiper({
       return { ...prev, [current.id]: Array.from(cur) };
     });
 
-  const confirmIngredients = () => {
+  const confirmIngredientsAndQuantity = () => {
     const selectedName = pickedNameById[current.id];
     const finalName = selectedName || nameCandidates[0] || null;
+    const portionText = quantityById[current.id] || '1인분'; // 기본값 1인분
     
-    console.log('🔍 confirmIngredients 디버그:', {
+    console.log('🔍 confirmIngredientsAndQuantity 디버그:', {
       currentImageId: current.id,
-      selectedName: selectedName,
-      finalName: finalName,
-      pickedNameById: pickedNameById,
-      nameCandidates: nameCandidates
+      finalName,
+      portionText
     });
     
     setPhaseById((prev) => ({ ...prev, [current.id]: 'done' }));
+    
     onConfirmItem?.({
       id: current.id,
       name: finalName,
       ingredients: pickedIngrById[current.id] ?? [],
+      portionText: portionText,
     });
     
     // 다중 이미지인 경우에만 자동으로 다음 이미지로 전환
@@ -152,6 +149,7 @@ export default function MealPeekSwiper({
       setTimeout(() => goNext(), autoSwipeDelayMs);
     }
   };
+
 
   const goBackToNameSelection = () => {
     setPhaseById((prev) => ({ ...prev, [current.id]: 'name' }));
@@ -181,18 +179,9 @@ export default function MealPeekSwiper({
     
     setPickedIngrById((prev) => ({ ...prev, [current.id]: ingredients }));
     
-    // 완료 처리
-    setPhaseById((prev) => ({ ...prev, [current.id]: 'done' }));
-    onConfirmItem?.({
-      id: current.id,
-      name: customFoodName.trim(),
-      ingredients: ingredients,
-    });
-    
-    // 다중 이미지인 경우에만 자동으로 다음 이미지로 전환
-    if (images.length > 1) {
-      setTimeout(() => goNext(), autoSwipeDelayMs);
-    }
+    // 섭취량 입력 단계로 이동하지 않고 바로 ingredients 단계로 이동 (UI 통합)
+    setPhaseById((prev) => ({ ...prev, [current.id]: 'ingredients' }));
+    setQuantityById(prev => ({ ...prev, [current.id]: '1인분' }));
   };
 
   return (
@@ -419,55 +408,165 @@ export default function MealPeekSwiper({
               {current.predictions && phase === 'ingredients' && (
                 <div className="flex flex-col h-full">
                   <div className="flex-shrink-0 mb-3">
-                    <p className="text-sm text-slate-600 mb-1">선택한 음식:</p>
-                    <p className="text-lg font-bold text-green-600 mb-2">
+                    <p className="text-lg font-bold text-green-600 mb-1">
                       {pickedNameById[current.id] || nameCandidates[0] || '(선택 없음)'}
                     </p>
-                    <p className="text-sm text-slate-600 mb-1">주재료는 아래와 같이 보입니다.</p>
-                    <p className="text-sm font-semibold text-slate-900">맞나요?</p>
+                    <p className="text-sm text-slate-600">
+                        재료와 섭취량을 확인해주세요.
+                    </p>
                   </div>
-                  <div className="flex flex-wrap gap-2 overflow-y-auto flex-1 pr-1 content-start">
-                    {ingredientsCandidates.map((ing) => {
-                      const selected = (pickedIngrById[current.id] ?? []).includes(ing);
-                      return (
-                        <button
-                          key={ing}
-                          onClick={() => toggleIngredient(ing)}
-                          className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${
-                            selected 
-                              ? 'bg-green-500 text-white border-green-600 shadow-sm' 
-                              : 'bg-white text-slate-700 border-slate-200 hover:border-green-300 active:bg-slate-50'
-                          }`}
-                        >
-                          {selected && <span className="mr-1">✓</span>}
-                          {ing}
-                        </button>
-                      );
-                    })}
+                  
+                  {/* 통합된 입력 영역 */}
+                  <div className="flex-1 overflow-y-auto pr-1">
+                    
+                    {/* 섹션 1: 재료 */}
+                    <div className="mb-6">
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                            들어간 재료
+                        </label>
+                        <div className="flex flex-wrap gap-2 content-start">
+                            {ingredientsCandidates.map((ing) => {
+                            const selected = (pickedIngrById[current.id] ?? []).includes(ing);
+                            return (
+                                <button
+                                key={ing}
+                                onClick={() => toggleIngredient(ing)}
+                                className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition ${
+                                    selected 
+                                    ? 'bg-green-500 text-white border-green-600 shadow-sm' 
+                                    : 'bg-white text-slate-700 border-slate-200 hover:border-green-300 active:bg-slate-50'
+                                }`}
+                                >
+                                {selected && <span className="mr-1">✓</span>}
+                                {ing}
+                                </button>
+                            );
+                            })}
+                        </div>
+                    </div>
+                    
+                    {/* 구분선 */}
+                    <hr className="border-slate-200 mb-6" />
+                    
+                    {/* 섹션 2: 섭취량 */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                            섭취량
+                        </label>
+                        <input
+                            type="text"
+                            value={quantityById[current.id] || ''}
+                            onChange={(e) => setQuantityById(prev => ({ ...prev, [current.id]: e.target.value }))}
+                            placeholder="예: 밥 한 공기, 피자 2조각, 200g"
+                            className="w-full px-4 py-3 text-lg border-2 border-blue-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-50 outline-none text-slate-800 placeholder-slate-400 transition-all"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') confirmIngredientsAndQuantity();
+                            }}
+                        />
+                        <p className="text-xs text-slate-500 mt-2">
+                            드신 양을 편하게 적어주세요.
+                        </p>
+                    </div>
                   </div>
+
                   <div className="mt-4 flex-shrink-0">
                     <button
-                      onClick={confirmIngredients}
-                      className="w-full px-4 py-3 rounded-xl bg-green-500 text-white font-semibold hover:bg-green-600 transition shadow-sm"
+                      onClick={confirmIngredientsAndQuantity}
+                      className="w-full px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition shadow-sm flex items-center justify-center"
                     >
-                      완료 → 다음 사진
+                      영양 정보 계산하기 →
                     </button>
                   </div>
                 </div>
               )}
 
               {current.predictions && phase === 'done' && (
-                <div className="flex flex-col items-center justify-center h-full space-y-3">
-                  <div className="text-5xl">✅</div>
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-green-600 mb-1">확인 완료!</p>
-                    <p className="text-sm text-slate-600">
-                      선택한 음식: <span className="font-semibold text-slate-900">{pickedNameById[current.id]}</span>
-                    </p>
-                    {images.length > 1 && (
-                      <p className="text-xs text-slate-500 mt-2">다음 사진으로 이동합니다...</p>
-                    )}
+                <div className="flex flex-col h-full relative">
+                  <div className="flex-shrink-0 mb-2 flex items-center justify-between">
+                     <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-sm font-bold">✓</div>
+                        <p className="font-bold text-slate-800 truncate max-w-[200px]">
+                            {pickedNameById[current.id] || nameCandidates[0]}
+                        </p>
+                     </div>
+                     <button 
+                        onClick={() => setPhaseById(prev => ({ ...prev, [current.id]: 'ingredients' }))}
+                        className="text-xs text-slate-400 underline hover:text-slate-600"
+                     >
+                        수정
+                     </button>
                   </div>
+                  
+                  {/* 영양 정보 미리보기 카드 */}
+                  <div className="flex-1 bg-slate-50 rounded-xl p-4 border border-slate-100 flex flex-col justify-center items-center">
+                     {/* 선택된 prediction 찾기 */}
+                     {(() => {
+                        const selectedName = pickedNameById[current.id] || nameCandidates[0];
+                        // selected인 항목을 최우선으로 찾음 (업데이트된 항목은 selected: true임)
+                        const prediction = current.predictions?.find(p => p.selected) || current.predictions?.find(p => p.name === selectedName);
+                        
+                        console.log('🔍 [MealPeekSwiper] 렌더링 디버그:', {
+                            phase,
+                            currentId: current.id,
+                            selectedName,
+                            hasCalories: prediction?.calories !== undefined,
+                            prediction
+                        });
+                        
+                        if (prediction && prediction.calories !== undefined) {
+                            return (
+                                <div className="w-full space-y-4">
+                                    <div className="text-center">
+                                        <p className="text-3xl font-bold text-slate-900">{prediction.calories} <span className="text-lg font-medium text-slate-500">kcal</span></p>
+                                        <p className="text-sm text-slate-500 mt-1">{prediction.portionSize || quantityById[current.id]}</p>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-3 gap-2 text-center">
+                                        <div className="bg-white p-2 rounded-lg shadow-sm">
+                                            <p className="text-xs text-slate-500">탄수화물</p>
+                                            <p className="font-bold text-slate-800">{prediction.nutrients?.carbs.toFixed(1)}g</p>
+                                        </div>
+                                        <div className="bg-white p-2 rounded-lg shadow-sm">
+                                            <p className="text-xs text-slate-500">단백질</p>
+                                            <p className="font-bold text-slate-800">{prediction.nutrients?.protein.toFixed(1)}g</p>
+                                        </div>
+                                        <div className="bg-white p-2 rounded-lg shadow-sm">
+                                            <p className="text-xs text-slate-500">지방</p>
+                                            <p className="font-bold text-slate-800">{prediction.nutrients?.fat.toFixed(1)}g</p>
+                                        </div>
+                                    </div>
+                                    
+                                    {prediction.healthScore !== undefined && (
+                                        <div className="bg-green-100 p-3 rounded-lg flex items-center justify-between relative group">
+                                            <span className="text-sm font-bold text-green-800 flex items-center cursor-help">
+                                                건강 점수
+                                                <span className="ml-1 text-xs bg-green-200 text-green-700 rounded-full w-4 h-4 flex items-center justify-center">i</span>
+                                            </span>
+                                            <span className="text-lg font-bold text-green-700">{prediction.healthScore}점</span>
+                                            
+                                            {/* 툴팁 */}
+                                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity w-56 text-center pointer-events-none z-50 shadow-lg">
+                                                영양 밀도와 균형을 종합한 점수입니다.<br/>(NRF9.3 지수 기반)
+                                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-800"></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        } else {
+                            return (
+                                <div className="text-center text-slate-400">
+                                    <div className="animate-spin text-2xl mb-2">🔄</div>
+                                    <p className="text-sm">영양 정보를 계산하고 있습니다...</p>
+                                </div>
+                            );
+                        }
+                     })()}
+                  </div>
+                  
+                  {images.length > 1 && (
+                      <p className="text-xs text-center text-slate-400 mt-3">다음 사진으로 이동합니다...</p>
+                  )}
                 </div>
               )}
             </div>
