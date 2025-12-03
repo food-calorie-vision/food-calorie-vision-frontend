@@ -465,6 +465,7 @@ export default function MealDiaryPage() {
                 ...pred, // 모든 속성 복사 (영양 정보 포함)
               })),
             }))}
+            onDeleteImage={handleDeleteImage}
             onConfirmItem={async (r) => {
               console.log('확정 결과 (Preview 요청):', r);
               
