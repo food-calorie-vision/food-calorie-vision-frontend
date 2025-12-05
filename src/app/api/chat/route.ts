@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const apiEndpoint = process.env.FASTAPI_URL || API_BASE_URL;
     
-    const response = await fetch(`${apiEndpoint}/api/v1/chat`, {
+    const response = await fetch(`${apiEndpoint}/api/v1/chat_v2`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

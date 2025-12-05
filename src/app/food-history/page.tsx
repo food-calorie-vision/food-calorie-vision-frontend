@@ -20,6 +20,27 @@ type MealRecord = {
   meal_type: string;
 };
 
+// 추천 식단인지 확인 (history_id가 음수이면 추천 식단)
+const isDietPlanMeal = (meal: MealRecord): boolean => {
+  return meal.history_id < 0 || meal.food_id.startsWith('diet_plan_');
+};
+
+// 추천 식단 음식명 정리 (기존 "식단명 - 아침" 형식 호환)
+const formatDietPlanFoodName = (foodName: string): string => {
+  // 이미 "식단명: 음식메뉴" 형식이면 그대로 반환
+  if (foodName.includes(': ')) {
+    return foodName;
+  }
+  // 기존 "식단명 - 아침/점심/저녁/간식" 형식이면 끼니 부분 제거
+  const mealSuffixes = [' - 아침', ' - 점심', ' - 저녁', ' - 간식'];
+  for (const suffix of mealSuffixes) {
+    if (foodName.endsWith(suffix)) {
+      return foodName.replace(suffix, '');
+    }
+  }
+  return foodName;
+};
+
 type ViewMode = 'calendar' | 'list';
 type ListFilter = 'today' | 'week' | 'month' | 'all';
 
@@ -387,6 +408,39 @@ export default function FoodHistoryPage() {
     }
   };
 
+  // 추천 식단 끼니 삭제
+  const handleDeleteDietPlanMeal = async (mealId: number, foodName: string) => {
+    if (!confirm(`"${foodName}" 추천 식단을 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    // 음수 ID를 양수로 변환 (백엔드에서는 양수 meal_id 사용)
+    const actualMealId = Math.abs(mealId);
+    setDeletingId(mealId);
+
+    try {
+      const response = await fetch(`${apiEndpoint}/api/v1/recommend/diet-plan-meal/${actualMealId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setMeals(prev => prev.filter(meal => meal.history_id !== mealId));
+          alert(`✅ ${result.message}`);
+        }
+      } else {
+        alert('❌ 삭제에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('추천 식단 삭제 실패:', error);
+      alert('❌ 삭제 중 오류가 발생했습니다.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   // 로딩 중
   if (loading) {
     return (
@@ -657,71 +711,95 @@ export default function FoodHistoryPage() {
 
             {/* 음식 기록 리스트 */}
             <div className="space-y-3">
-              {getMealsByDate(meals, selectedDate).map((meal, index) => (
-                <div
-                  key={meal.history_id}
-                  className={`bg-gradient-to-r ${getMealTypeColor(meal.meal_type)} rounded-xl border-2 p-4 shadow-sm transition-all duration-300 hover:shadow-md ${
-                    deletingId === meal.history_id ? 'opacity-50 scale-95' : 'opacity-100 scale-100'
-                  }`}
-                  style={{
-                    animation: `slideIn 0.3s ease-out ${index * 0.05}s both`
-                  }}
-                >
-                  <div className="flex items-start justify-between mb-3 gap-2">
-                    <div className="flex items-start gap-2 flex-1 min-w-0">
-                      <span className="text-2xl flex-shrink-0">{getMealTypeEmoji(meal.meal_type)}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-bold text-slate-900 break-words line-clamp-2 text-sm leading-tight">
-                            {meal.food_name}
-                          </h3>
-                          {meal.food_grade && (
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${getGradeColor(meal.food_grade)}`}>
-                              {meal.food_grade}
-                            </span>
-                          )}
+              {getMealsByDate(meals, selectedDate).map((meal, index) => {
+                const isDietPlan = isDietPlanMeal(meal);
+                return (
+                  <div
+                    key={meal.history_id}
+                    className={`bg-gradient-to-r ${
+                      isDietPlan 
+                        ? 'from-purple-50 to-violet-100 border-purple-200' 
+                        : getMealTypeColor(meal.meal_type)
+                    } rounded-xl border-2 p-4 shadow-sm transition-all duration-300 hover:shadow-md ${
+                      deletingId === meal.history_id ? 'opacity-50 scale-95' : 'opacity-100 scale-100'
+                    }`}
+                    style={{
+                      animation: `slideIn 0.3s ease-out ${index * 0.05}s both`
+                    }}
+                  >
+                    <div className="flex items-start justify-between mb-3 gap-2">
+                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                        <span className="text-2xl flex-shrink-0">
+                          {isDietPlan ? '📋' : getMealTypeEmoji(meal.meal_type)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-slate-900 break-words line-clamp-2 text-sm leading-tight">
+                              {isDietPlan ? formatDietPlanFoodName(meal.food_name) : meal.food_name}
+                            </h3>
+                            {isDietPlan && (
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-200 text-purple-700 flex-shrink-0">
+                                추천식단
+                              </span>
+                            )}
+                            {meal.food_grade && !isDietPlan && (
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${getGradeColor(meal.food_grade)}`}>
+                                {meal.food_grade}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-600 mt-1">{formatTime(meal.consumed_at)}</p>
                         </div>
-                        <p className="text-xs text-slate-600 mt-1">{formatTime(meal.consumed_at)}</p>
                       </div>
+                      <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 whitespace-nowrap ${
+                        isDietPlan ? 'bg-purple-200 text-purple-700' :
+                        meal.meal_type === 'breakfast' ? 'bg-orange-200 text-orange-700' :
+                        meal.meal_type === 'lunch' ? 'bg-yellow-200 text-yellow-700' :
+                        meal.meal_type === 'dinner' ? 'bg-indigo-200 text-indigo-700' :
+                        'bg-pink-200 text-pink-700'
+                      }`}>
+                        {getMealTypeKr(meal.meal_type)}
+                      </span>
                     </div>
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 whitespace-nowrap ${
-                      meal.meal_type === 'breakfast' ? 'bg-orange-200 text-orange-700' :
-                      meal.meal_type === 'lunch' ? 'bg-yellow-200 text-yellow-700' :
-                      meal.meal_type === 'dinner' ? 'bg-indigo-200 text-indigo-700' :
-                      'bg-pink-200 text-pink-700'
-                    }`}>
-                      {getMealTypeKr(meal.meal_type)}
-                    </span>
-                  </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-sm">
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-600">🔥</span>
-                        <span className="font-semibold text-slate-900">{meal.calories}kcal</span>
-                      </div>
-                      {meal.health_score !== null && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 text-sm">
                         <div className="flex items-center gap-1">
-                          <span className="text-slate-600">💚</span>
-                          <span className="font-semibold text-slate-900">{meal.health_score}점</span>
+                          <span className="text-slate-600">🔥</span>
+                          <span className="font-semibold text-slate-900">{meal.calories}kcal</span>
                         </div>
-                      )}
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-600">⚖️</span>
-                        <span className="text-slate-700">{meal.portion_size_g}g</span>
+                        {meal.health_score !== null && !isDietPlan && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-600">💚</span>
+                            <span className="font-semibold text-slate-900">{meal.health_score}점</span>
+                          </div>
+                        )}
+                        {!isDietPlan && meal.portion_size_g > 0 && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-600">⚖️</span>
+                            <span className="text-slate-700">{meal.portion_size_g}g</span>
+                          </div>
+                        )}
                       </div>
-                    </div>
 
-                    <button
-                      onClick={() => handleDelete(meal.history_id, meal.food_name)}
-                      disabled={deletingId === meal.history_id}
-                      className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {deletingId === meal.history_id ? '삭제 중...' : '삭제'}
-                    </button>
+                      <button
+                        onClick={() => isDietPlan 
+                          ? handleDeleteDietPlanMeal(meal.history_id, meal.food_name)
+                          : handleDelete(meal.history_id, meal.food_name)
+                        }
+                        disabled={deletingId === meal.history_id}
+                        className={`px-3 py-1.5 text-white text-xs font-medium rounded-lg active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                          isDietPlan 
+                            ? 'bg-purple-500 hover:bg-purple-600' 
+                            : 'bg-red-500 hover:bg-red-600'
+                        }`}
+                      >
+                        {deletingId === meal.history_id ? '삭제 중...' : '삭제'}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -844,71 +922,95 @@ export default function FoodHistoryPage() {
 
                     {/* 해당 날짜의 음식 기록들 */}
                     <div className="space-y-3">
-                      {dateMeals.map((meal, index) => (
-                        <div
-                          key={meal.history_id}
-                          className={`bg-gradient-to-r ${getMealTypeColor(meal.meal_type)} rounded-xl border-2 p-4 shadow-sm transition-all duration-300 hover:shadow-md ${
-                            deletingId === meal.history_id ? 'opacity-50 scale-95' : 'opacity-100 scale-100'
-                          }`}
-                          style={{
-                            animation: `slideIn 0.3s ease-out ${(groupIndex * 0.1 + index * 0.05)}s both`
-                          }}
-                        >
-                          <div className="flex items-start justify-between mb-3 gap-2">
-                            <div className="flex items-start gap-2 flex-1 min-w-0">
-                              <span className="text-2xl flex-shrink-0">{getMealTypeEmoji(meal.meal_type)}</span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h3 className="font-bold text-slate-900 break-words line-clamp-2 text-sm leading-tight">
-                                    {meal.food_name}
-                                  </h3>
-                                  {meal.food_grade && (
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${getGradeColor(meal.food_grade)}`}>
-                                      {meal.food_grade}
-                                    </span>
-                                  )}
+                      {dateMeals.map((meal, index) => {
+                        const isDietPlan = isDietPlanMeal(meal);
+                        return (
+                          <div
+                            key={meal.history_id}
+                            className={`bg-gradient-to-r ${
+                              isDietPlan 
+                                ? 'from-purple-50 to-violet-100 border-purple-200' 
+                                : getMealTypeColor(meal.meal_type)
+                            } rounded-xl border-2 p-4 shadow-sm transition-all duration-300 hover:shadow-md ${
+                              deletingId === meal.history_id ? 'opacity-50 scale-95' : 'opacity-100 scale-100'
+                            }`}
+                            style={{
+                              animation: `slideIn 0.3s ease-out ${(groupIndex * 0.1 + index * 0.05)}s both`
+                            }}
+                          >
+                            <div className="flex items-start justify-between mb-3 gap-2">
+                              <div className="flex items-start gap-2 flex-1 min-w-0">
+                                <span className="text-2xl flex-shrink-0">
+                                  {isDietPlan ? '📋' : getMealTypeEmoji(meal.meal_type)}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h3 className="font-bold text-slate-900 break-words line-clamp-2 text-sm leading-tight">
+                                      {isDietPlan ? formatDietPlanFoodName(meal.food_name) : meal.food_name}
+                                    </h3>
+                                    {isDietPlan && (
+                                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-200 text-purple-700 flex-shrink-0">
+                                        추천식단
+                                      </span>
+                                    )}
+                                    {meal.food_grade && !isDietPlan && (
+                                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${getGradeColor(meal.food_grade)}`}>
+                                        {meal.food_grade}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-slate-600 mt-1">{formatTime(meal.consumed_at)}</p>
                                 </div>
-                                <p className="text-xs text-slate-600 mt-1">{formatTime(meal.consumed_at)}</p>
                               </div>
+                              <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 whitespace-nowrap ${
+                                isDietPlan ? 'bg-purple-200 text-purple-700' :
+                                meal.meal_type === 'breakfast' ? 'bg-orange-200 text-orange-700' :
+                                meal.meal_type === 'lunch' ? 'bg-yellow-200 text-yellow-700' :
+                                meal.meal_type === 'dinner' ? 'bg-indigo-200 text-indigo-700' :
+                                'bg-pink-200 text-pink-700'
+                              }`}>
+                                {getMealTypeKr(meal.meal_type)}
+                              </span>
                             </div>
-                            <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 whitespace-nowrap ${
-                              meal.meal_type === 'breakfast' ? 'bg-orange-200 text-orange-700' :
-                              meal.meal_type === 'lunch' ? 'bg-yellow-200 text-yellow-700' :
-                              meal.meal_type === 'dinner' ? 'bg-indigo-200 text-indigo-700' :
-                              'bg-pink-200 text-pink-700'
-                            }`}>
-                              {getMealTypeKr(meal.meal_type)}
-                            </span>
-                          </div>
 
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4 text-sm">
-                              <div className="flex items-center gap-1">
-                                <span className="text-slate-600">🔥</span>
-                                <span className="font-semibold text-slate-900">{meal.calories}kcal</span>
-                              </div>
-                              {meal.health_score !== null && (
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4 text-sm">
                                 <div className="flex items-center gap-1">
-                                  <span className="text-slate-600">💚</span>
-                                  <span className="font-semibold text-slate-900">{meal.health_score}점</span>
+                                  <span className="text-slate-600">🔥</span>
+                                  <span className="font-semibold text-slate-900">{meal.calories}kcal</span>
                                 </div>
-                              )}
-                              <div className="flex items-center gap-1">
-                                <span className="text-slate-600">⚖️</span>
-                                <span className="text-slate-700">{meal.portion_size_g}g</span>
+                                {meal.health_score !== null && !isDietPlan && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-slate-600">💚</span>
+                                    <span className="font-semibold text-slate-900">{meal.health_score}점</span>
+                                  </div>
+                                )}
+                                {!isDietPlan && meal.portion_size_g > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-slate-600">⚖️</span>
+                                    <span className="text-slate-700">{meal.portion_size_g}g</span>
+                                  </div>
+                                )}
                               </div>
-                            </div>
 
-                            <button
-                              onClick={() => handleDelete(meal.history_id, meal.food_name)}
-                              disabled={deletingId === meal.history_id}
-                              className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {deletingId === meal.history_id ? '삭제 중...' : '삭제'}
-                            </button>
+                              <button
+                                onClick={() => isDietPlan 
+                                  ? handleDeleteDietPlanMeal(meal.history_id, meal.food_name)
+                                  : handleDelete(meal.history_id, meal.food_name)
+                                }
+                                disabled={deletingId === meal.history_id}
+                                className={`px-3 py-1.5 text-white text-xs font-medium rounded-lg active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                                  isDietPlan 
+                                    ? 'bg-purple-500 hover:bg-purple-600' 
+                                    : 'bg-red-500 hover:bg-red-600'
+                                }`}
+                              >
+                                {deletingId === meal.history_id ? '삭제 중...' : '삭제'}
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
