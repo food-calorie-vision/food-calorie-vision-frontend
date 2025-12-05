@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
@@ -8,8 +8,23 @@ import { useSession } from '@/contexts/SessionContext';
 import { API_BASE_URL } from '@/utils/api';
 
 /* ===== Types ===== */
-type Allergy = { id: string; name: string };
-type Disease = { id: string; name: string; priority: number };
+type Allergy = { id: number; name: string };
+type Disease = { id: number; name: string; priority: number };
+
+interface HealthProfileItem {
+  profile_id: number;
+  name: string;
+  type: 'allergy' | 'disease';
+}
+
+interface UserProfile {
+  nickname: string | null;
+  height: number | null;
+  weight: number | null;
+  age: number | null;
+  gender: string | null;
+  health_goal: string | null;
+}
 
 /* ===== Utils ===== */
 function emojiForAllergy(name: string) {
@@ -28,28 +43,24 @@ const toast = (msg: string) => {
   const el = document.createElement('div');
   el.textContent = msg;
   el.className =
-    'fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow';
+    'fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow z-[200]';
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1300);
+  setTimeout(() => el.remove(), 2000);
 };
 
 export default function SettingsPage() {
   const router = useRouter();
   const { isAuthenticated, userName, logout } = useSession();
 
+  // 로딩 상태
+  const [loading, setLoading] = useState(true);
+
   // 설정 상태
-  const [allergies, setAllergies] = useState<Allergy[]>([
-    { id: 'peanut', name: '땅콩' },
-    { id: 'milk', name: '우유' },
-  ]);
-  const [diseases, setDiseases] = useState<Disease[]>([
-    { id: 'dm', name: '당뇨병', priority: 1 },
-    { id: 'htn', name: '고혈압', priority: 2 },
-    { id: 'liver', name: '간질환', priority: 3 },
-  ]);
-  const [nickname, setNickname] = useState('user1234');
-  const [heightCm, setHeightCm] = useState<string>(''); // cm
-  const [weightKg, setWeightKg] = useState<string>(''); // kg
+  const [allergies, setAllergies] = useState<Allergy[]>([]);
+  const [diseases, setDiseases] = useState<Disease[]>([]);
+  const [nickname, setNickname] = useState('');
+  const [heightCm, setHeightCm] = useState<string>('');
+  const [weightKg, setWeightKg] = useState<string>('');
 
   const [openAddAllergy, setOpenAddAllergy] = useState(false);
   const [openAddDisease, setOpenAddDisease] = useState(false);
@@ -60,79 +71,176 @@ export default function SettingsPage() {
   const [formWeight, setFormWeight] = useState('');
   const [formPwd, setFormPwd] = useState('');
   const [formNewPwd, setFormNewPwd] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  // 로컬 저장된 설정 값 불러오기
-  useEffect(() => {
-    const raw = localStorage.getItem('settings-demo');
-    if (!raw) return;
+  // API에서 사용자 프로필 조회
+  const fetchProfile = useCallback(async () => {
     try {
-      const s = JSON.parse(raw);
-
-      if (Array.isArray(s.allergies)) {
-        setAllergies(
-          s.allergies
-            .map((x: { id?: string; name?: string }) => ({
-              id: String(x.id ?? x.name ?? '').toLowerCase(),
-              name: String(x.name ?? x.id ?? ''),
-            }))
-            .filter((x: Allergy) => x.id && x.name),
-        );
+      const res = await fetch(`${API_BASE_URL}/api/v1/users/me/profile`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          const profile: UserProfile = data.data;
+          setNickname(profile.nickname || '');
+          setHeightCm(profile.height ? String(profile.height) : '');
+          setWeightKg(profile.weight ? String(profile.weight) : '');
+        }
       }
-
-      if (Array.isArray(s.diseases)) {
-        setDiseases(
-          reindex(
-            s.diseases.map((x: { id?: string; name?: string; priority?: number }, i: number) => ({
-              id: String(x.id ?? x.name ?? '').toLowerCase(),
-              name: String(x.name ?? x.id ?? ''),
-              priority: Number.isFinite(x.priority) ? x.priority! : i + 1,
-            })),
-          ),
-        );
-      }
-
-      if (s.nickname) setNickname(String(s.nickname));
-      if (s.heightCm !== undefined) setHeightCm(String(s.heightCm));
-      if (s.weightKg !== undefined) setWeightKg(String(s.weightKg));
-    } catch {
-      // JSON 파싱 실패 시 무시
+    } catch (error) {
+      console.error('프로필 조회 실패:', error);
     }
   }, []);
 
-  const persist = () =>
-    localStorage.setItem(
-      'settings-demo',
-      JSON.stringify({
-        allergies,
-        diseases,
-        nickname,
-        heightCm,
-        weightKg,
-      }),
-    );
+  // API에서 건강 프로필 (알러지/질환) 조회
+  const fetchHealthProfile = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/users/me/health-profile`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          const allergyList: Allergy[] = data.data.allergies.map((a: HealthProfileItem) => ({
+            id: a.profile_id,
+            name: a.name,
+          }));
+          const diseaseList: Disease[] = data.data.diseases.map((d: HealthProfileItem, idx: number) => ({
+            id: d.profile_id,
+            name: d.name,
+            priority: idx + 1,
+          }));
+          setAllergies(allergyList);
+          setDiseases(diseaseList);
+        }
+      }
+    } catch (error) {
+      console.error('건강 프로필 조회 실패:', error);
+    }
+  }, []);
 
-  const onAddAllergy = () => {
+  // 초기 데이터 로드
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([fetchProfile(), fetchHealthProfile()]);
+      setLoading(false);
+    };
+    
+    if (isAuthenticated) {
+      loadData();
+    } else {
+      setLoading(false);
+    }
+  }, [isAuthenticated, fetchProfile, fetchHealthProfile]);
+
+  // 알러지 추가 (API)
+  const onAddAllergy = async () => {
     const name = inputName.trim();
     if (!name) return;
-    const id = name.toLowerCase();
-    if (allergies.some((a) => a.id === id)) return toast('이미 추가된 알러지예요.');
-    setAllergies((p) => [...p, { id, name }]);
-    setInputName('');
-    setOpenAddAllergy(false);
+    
+    try {
+      setSaving(true);
+      const res = await fetch(`${API_BASE_URL}/api/v1/users/me/health-profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name, type: 'allergy' }),
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        setAllergies((prev) => [...prev, { id: data.data.profile_id, name: data.data.name }]);
+        setInputName('');
+        setOpenAddAllergy(false);
+        toast('알러지가 추가되었습니다.');
+      } else {
+        toast(data.detail || '알러지 추가 실패');
+      }
+    } catch (error) {
+      console.error('알러지 추가 실패:', error);
+      toast('알러지 추가 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
-  const removeAllergy = (id: string) => setAllergies((p) => p.filter((a) => a.id !== id));
 
-  const onAddDisease = () => {
+  // 알러지 삭제 (API)
+  const removeAllergy = async (id: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/users/me/health-profile/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      
+      if (res.ok) {
+        setAllergies((prev) => prev.filter((a) => a.id !== id));
+        toast('삭제되었습니다.');
+      } else {
+        const data = await res.json();
+        toast(data.detail || '삭제 실패');
+      }
+    } catch (error) {
+      console.error('알러지 삭제 실패:', error);
+      toast('삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 질환 추가 (API)
+  const onAddDisease = async () => {
     const name = inputName.trim();
     if (!name) return;
-    const id = name.toLowerCase();
-    if (diseases.some((d) => d.id === id)) return toast('이미 추가된 질환이에요.');
-    const maxPri = diseases.length ? Math.max(...diseases.map((d) => d.priority)) : 0;
-    setDiseases(reindex([...diseases, { id, name, priority: maxPri + 1 }]));
-    setInputName('');
-    setOpenAddDisease(false);
+    
+    try {
+      setSaving(true);
+      const res = await fetch(`${API_BASE_URL}/api/v1/users/me/health-profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name, type: 'disease' }),
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        const maxPri = diseases.length ? Math.max(...diseases.map((d) => d.priority)) : 0;
+        setDiseases((prev) => reindex([...prev, { id: data.data.profile_id, name: data.data.name, priority: maxPri + 1 }]));
+        setInputName('');
+        setOpenAddDisease(false);
+        toast('질환이 추가되었습니다.');
+      } else {
+        toast(data.detail || '질환 추가 실패');
+      }
+    } catch (error) {
+      console.error('질환 추가 실패:', error);
+      toast('질환 추가 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
-  const removeDisease = (id: string) => setDiseases((p) => reindex(p.filter((d) => d.id !== id)));
+
+  // 질환 삭제 (API)
+  const removeDisease = async (id: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/users/me/health-profile/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      
+      if (res.ok) {
+        setDiseases((prev) => reindex(prev.filter((d) => d.id !== id)));
+        toast('삭제되었습니다.');
+      } else {
+        const data = await res.json();
+        toast(data.detail || '삭제 실패');
+      }
+    } catch (error) {
+      console.error('질환 삭제 실패:', error);
+      toast('삭제 중 오류가 발생했습니다.');
+    }
+  };
 
   function moveDisease(viewIdx: number, dir: 'up' | 'down') {
     const sorted = [...diseases].sort((a, b) => a.priority - b.priority);
@@ -143,14 +251,10 @@ export default function SettingsPage() {
     sorted.splice(to, 0, item);
     setDiseases(reindex(sorted));
   }
+
   function reindex(list: Disease[]) {
     return list.map((d, i) => ({ ...d, priority: i + 1 }));
   }
-
-  const saveAll = () => {
-    persist();
-    toast('설정이 저장되었습니다.');
-  };
 
   const openEditAccount = () => {
     setFormNick(nickname || '');
@@ -161,19 +265,100 @@ export default function SettingsPage() {
     setOpenAccountModal(true);
   };
 
-  const saveAccount = () => {
+  // 계정 정보 저장 (API)
+  const saveAccount = async () => {
     if (!formNick.trim()) return toast('닉네임을 입력하세요.');
     if ((formPwd && !formNewPwd) || (!formPwd && formNewPwd)) {
       return toast('현재/새 비밀번호를 모두 입력하거나 모두 비워주세요.');
     }
-    // TODO: 비밀번호 변경 API 연동 시 여기에서 호출
-    setNickname(formNick.trim());
-    setHeightCm(formHeight.trim());
-    setWeightKg(formWeight.trim());
-    persist();
-    setOpenAccountModal(false);
-    toast('계정 정보가 저장되었습니다.');
+    
+    try {
+      setSaving(true);
+      
+      // 1. 프로필 수정
+      const profileRes = await fetch(`${API_BASE_URL}/api/v1/users/me/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          nickname: formNick.trim(),
+          height: formHeight ? parseFloat(formHeight) : null,
+          weight: formWeight ? parseFloat(formWeight) : null,
+        }),
+      });
+      
+      if (!profileRes.ok) {
+        const data = await profileRes.json();
+        toast(data.detail || '프로필 수정 실패');
+        return;
+      }
+      
+      // 2. 비밀번호 변경 (입력된 경우만)
+      if (formPwd && formNewPwd) {
+        const pwdRes = await fetch(`${API_BASE_URL}/api/v1/users/me/change-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            current_password: formPwd,
+            new_password: formNewPwd,
+          }),
+        });
+        
+        if (!pwdRes.ok) {
+          const data = await pwdRes.json();
+          toast(data.detail || '비밀번호 변경 실패');
+          return;
+        }
+      }
+      
+      // 상태 업데이트
+      setNickname(formNick.trim());
+      setHeightCm(formHeight.trim());
+      setWeightKg(formWeight.trim());
+      setOpenAccountModal(false);
+      toast('계정 정보가 저장되었습니다.');
+      
+    } catch (error) {
+      console.error('계정 저장 실패:', error);
+      toast('저장 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white mobile-content flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-3 text-gray-500">로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-white mobile-content">
+        <MobileHeader isLoggedIn={false} userName={undefined} handleLogout={logout} />
+        <main className="max-w-md mx-auto px-4 py-6 pb-20">
+          <div className="text-center py-10">
+            <div className="text-4xl mb-4">🔒</div>
+            <h2 className="text-lg font-semibold text-gray-800 mb-2">로그인이 필요합니다</h2>
+            <p className="text-sm text-gray-500 mb-4">설정을 변경하려면 로그인해 주세요.</p>
+            <button
+              onClick={() => router.push('/login')}
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              로그인하기
+            </button>
+          </div>
+        </main>
+        <MobileNav />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white mobile-content">
@@ -202,20 +387,24 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <div className="text-sm text-gray-700 font-medium">알러지 설정</div>
               <div className="space-y-2">
-                {allergies.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between py-1">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg leading-none">{emojiForAllergy(a.name)}</span>
-                      <span className="text-gray-800 text-sm">{a.name}</span>
+                {allergies.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-2">등록된 알러지가 없습니다.</p>
+                ) : (
+                  allergies.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between py-1">
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg leading-none">{emojiForAllergy(a.name)}</span>
+                        <span className="text-gray-800 text-sm">{a.name}</span>
+                      </div>
+                      <button
+                        onClick={() => removeAllergy(a.id)}
+                        className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
+                      >
+                        삭제
+                      </button>
                     </div>
-                    <button
-                      onClick={() => removeAllergy(a.id)}
-                      className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
               <button
                 onClick={() => {
@@ -234,40 +423,44 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <div className="text-sm text-gray-700 font-medium">질환 설정</div>
               <div className="space-y-2">
-                {[...diseases]
-                  .sort((a, b) => a.priority - b.priority)
-                  .map((d, viewIdx) => (
-                    <div key={d.id} className="flex items-center justify-between py-1">
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
-                          {d.priority}
-                        </span>
-                        <span className="text-gray-800 text-sm">{d.name}</span>
+                {diseases.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-2">등록된 질환이 없습니다.</p>
+                ) : (
+                  [...diseases]
+                    .sort((a, b) => a.priority - b.priority)
+                    .map((d, viewIdx) => (
+                      <div key={d.id} className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-3">
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+                            {d.priority}
+                          </span>
+                          <span className="text-gray-800 text-sm">{d.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => moveDisease(viewIdx, 'up')}
+                            className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50"
+                            aria-label="위로"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            onClick={() => moveDisease(viewIdx, 'down')}
+                            className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50"
+                            aria-label="아래로"
+                          >
+                            ▼
+                          </button>
+                          <button
+                            onClick={() => removeDisease(d.id)}
+                            className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50"
+                          >
+                            삭제
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => moveDisease(viewIdx, 'up')}
-                          className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50"
-                          aria-label="위로"
-                        >
-                          ▲
-                        </button>
-                        <button
-                          onClick={() => moveDisease(viewIdx, 'down')}
-                          className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50"
-                          aria-label="아래로"
-                        >
-                          ▼
-                        </button>
-                        <button
-                          onClick={() => removeDisease(d.id)}
-                          className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-50"
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                )}
               </div>
               <button
                 onClick={() => {
@@ -303,13 +496,6 @@ export default function SettingsPage() {
               </div>
             </div>
           </SectionCard>
-
-          <button
-            onClick={saveAll}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-xl py-3"
-          >
-            변경사항 저장하기
-          </button>
         </div>
       </main>
 
@@ -322,6 +508,7 @@ export default function SettingsPage() {
             onChange={setInputName}
             onCancel={() => setOpenAddAllergy(false)}
             onConfirm={onAddAllergy}
+            saving={saving}
           />
         </BottomSheet>
       )}
@@ -333,6 +520,7 @@ export default function SettingsPage() {
             onChange={setInputName}
             onCancel={() => setOpenAddDisease(false)}
             onConfirm={onAddDisease}
+            saving={saving}
           />
         </BottomSheet>
       )}
@@ -399,15 +587,17 @@ export default function SettingsPage() {
             <div className="flex justify-end gap-2 pt-1">
               <button
                 onClick={() => setOpenAccountModal(false)}
-                className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50"
+                disabled={saving}
+                className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
               >
                 취소
               </button>
               <button
                 onClick={saveAccount}
-                className="px-4 py-2 text-sm rounded-lg text-white bg-green-500 hover:bg-green-600"
+                disabled={saving}
+                className="px-4 py-2 text-sm rounded-lg text-white bg-green-500 hover:bg-green-600 disabled:opacity-50"
               >
-                저장
+                {saving ? '저장 중...' : '저장'}
               </button>
             </div>
           </div>
@@ -520,12 +710,14 @@ function AddNameForm({
   onChange,
   onCancel,
   onConfirm,
+  saving = false,
 }: {
   placeholder: string;
   value: string;
   onChange: (v: string) => void;
   onCancel: () => void;
   onConfirm: () => void;
+  saving?: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -539,15 +731,17 @@ function AddNameForm({
       <div className="flex gap-2">
         <button
           onClick={onCancel}
-          className="flex-1 px-4 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+          disabled={saving}
+          className="flex-1 px-4 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
           취소
         </button>
         <button
           onClick={onConfirm}
-          className="flex-1 px-4 py-3 rounded-lg text-white bg-green-500 hover:bg-green-600"
+          disabled={saving}
+          className="flex-1 px-4 py-3 rounded-lg text-white bg-green-500 hover:bg-green-600 disabled:opacity-50"
         >
-          추가
+          {saving ? '추가 중...' : '추가'}
         </button>
       </div>
     </div>
