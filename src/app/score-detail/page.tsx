@@ -103,14 +103,14 @@ export default function ScoreDetailPage() {
               calorieRatio: data.calorie_ratio !== undefined ? data.calorie_ratio : undefined,
               previousScore: data.previous_score ? Math.round(data.previous_score) : 0,
               scoreChange: data.score_change ? Math.round(data.score_change) : 0,
-              categories: data.categories.map((cat: any) => ({
+              categories: data.categories.map((cat: { name: string; score: number; max_score: number; trend: string; feedback: string }) => ({
                 name: cat.name,
                 score: Math.round(cat.score),
                 maxScore: cat.max_score,
                 trend: cat.trend as 'up' | 'down' | 'same',
                 feedback: cat.feedback
               })),
-              weeklyTrend: data.weekly_trend.map((day: any) => ({
+              weeklyTrend: data.weekly_trend.map((day: { date: string; score: number }) => ({
                 date: day.date,
                 score: Math.round(day.score)
               }))

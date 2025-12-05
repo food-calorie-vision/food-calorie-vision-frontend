@@ -8,8 +8,16 @@ import { ScoreData } from '@/types';
 import { API_BASE_URL } from '@/utils/api';
 import { useSession } from '@/contexts/SessionContext';
 
+interface UserInfo {
+  user_id?: number;
+  username?: string;
+  nickname?: string;
+  health_goal?: string;
+  recommended_calories?: number;
+}
+
 interface MyScoreProps {
-  userInfo?: any; // 사용자 정보
+  userInfo?: UserInfo;
 }
 
 const MyScore = ({ userInfo }: MyScoreProps) => {

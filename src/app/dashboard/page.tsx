@@ -14,7 +14,13 @@ import { API_BASE_URL } from '@/utils/api';
 export default function Dashboard() {
   const router = useRouter();
   const { isAuthenticated, userName, logout } = useSession();
-  const [userInfo, setUserInfo] = useState<any>(null);
+  const [userInfo, setUserInfo] = useState<{
+    user_id?: number;
+    username?: string;
+    nickname?: string;
+    health_goal?: string;
+    recommended_calories?: number;
+  } | null>(null);
 
   useEffect(() => {
     // 백엔드에서 사용자 정보 가져오기 (페이지 로드 시 한 번만)

@@ -71,7 +71,7 @@ export default function SettingsPage() {
       if (Array.isArray(s.allergies)) {
         setAllergies(
           s.allergies
-            .map((x: any) => ({
+            .map((x: { id?: string; name?: string }) => ({
               id: String(x.id ?? x.name ?? '').toLowerCase(),
               name: String(x.name ?? x.id ?? ''),
             }))
@@ -82,10 +82,10 @@ export default function SettingsPage() {
       if (Array.isArray(s.diseases)) {
         setDiseases(
           reindex(
-            s.diseases.map((x: any, i: number) => ({
+            s.diseases.map((x: { id?: string; name?: string; priority?: number }, i: number) => ({
               id: String(x.id ?? x.name ?? '').toLowerCase(),
               name: String(x.name ?? x.id ?? ''),
-              priority: Number.isFinite(x.priority) ? x.priority : i + 1,
+              priority: Number.isFinite(x.priority) ? x.priority! : i + 1,
             })),
           ),
         );
