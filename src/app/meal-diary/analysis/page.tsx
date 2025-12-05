@@ -180,7 +180,7 @@ export default function MealDiaryPage() {
             
             if (analysis.candidates && analysis.candidates.length > 0) {
               // 여러 후보가 있는 경우: 각 후보를 predictions로 변환
-              analysis.candidates.forEach((candidate: any, index: number) => {
+              analysis.candidates.forEach((candidate: { foodName: string; confidence: number; description?: string; ingredients?: string[] }, index: number) => {
                 predictions.push({
                   name: candidate.foodName,
                   confidence: candidate.confidence,

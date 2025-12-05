@@ -42,24 +42,31 @@ interface SignupFormData {
 }
 
 /** 에러 메시지 파서(FastAPI 대응) */
-function extractErrorMessage(data: any): string {
+type ErrorDetail = string | { msg?: string; loc?: string | string[] } | Array<string | { msg?: string; loc?: string | string[] }>;
+interface ApiErrorResponse {
+  detail?: ErrorDetail;
+  message?: string;
+  error?: string;
+}
+
+function extractErrorMessage(data: ApiErrorResponse | string | null): string {
   try {
     if (!data) return '회원가입에 실패했습니다.';
     if (typeof data === 'string') return data;
-    const d = (data as any).detail;
+    const d = data.detail;
     if (d !== undefined) {
       if (typeof d === 'string') return d;
       if (Array.isArray(d) && d.length > 0) {
         const x = d[0];
         if (typeof x === 'string') return x;
-        if (x?.msg) {
+        if (typeof x === 'object' && x?.msg) {
           const loc = x?.loc ? ` (${Array.isArray(x.loc) ? x.loc.join('.') : x.loc})` : '';
           return `${x.msg}${loc}`;
         }
         return JSON.stringify(x);
       }
-      if (typeof d === 'object' && d !== null) {
-        if ((d as any).msg) return (d as any).msg;
+      if (typeof d === 'object' && d !== null && !Array.isArray(d)) {
+        if (d.msg) return d.msg;
         return JSON.stringify(d);
       }
     }
@@ -149,8 +156,8 @@ export default function SignupPage() {
   }, [f]);
 
 
-  const prune = (obj: Record<string, any>) => {
-    const out: Record<string, any> = {};
+  const prune = (obj: Record<string, unknown>) => {
+    const out: Record<string, unknown> = {};
     Object.entries(obj).forEach(([k, v]) => {
       if (v === '' || v === undefined || v === null) return;
       if (typeof v === 'string' && v.trim() === '') return;
@@ -219,7 +226,7 @@ export default function SignupPage() {
         body: JSON.stringify(prune(payloadRaw)),
       });
 
-      let data: any = null;
+      let data: ApiErrorResponse & { success?: boolean } | null = null;
       try { data = await res.json(); } catch { /* 빈 응답 대비 */ }
 
       if (res.ok && (data?.success ?? true)) {

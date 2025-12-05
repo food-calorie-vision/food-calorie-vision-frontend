@@ -15,7 +15,7 @@ export function apiFetch(
     url = path;
   } else {
     // 1. API_BASE_URL (예: "http://localhost:8000" 또는 "")
-    let base = API_BASE_URL;
+    const base = API_BASE_URL;
     
     // 2. path가 '/api/v1'을 이미 포함하고 있는지 체크
     const pathHasPrefix = path.startsWith("/api/v1") || path.startsWith("api/v1");

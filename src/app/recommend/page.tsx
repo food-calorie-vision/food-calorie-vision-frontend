@@ -560,7 +560,7 @@ const [contextReady, setContextReady] = useState(false);
     }, 2000);
     setLoadingStatus({ text: funnyRecipeLoadingMessages[0], seconds: 0 });
     
-    let result: any = null;
+    let result: { response?: string; message?: string; needs_tool_call?: boolean } | null = null;
 
     try {
       // API 호출 전 필수 값 확인
@@ -941,7 +941,7 @@ const [contextReady, setContextReady] = useState(false);
         const customData = result.data;
         const nutrition = customData.nutrition_info;
         let convertedSteps: CookingStep[] = Array.isArray(customData.steps)
-          ? customData.steps.map((step: any, index: number) => ({
+          ? customData.steps.map((step: { step_number?: number; stepNumber?: number; title?: string; description?: string; tip?: string }, index: number) => ({
               stepNumber: step.step_number ?? step.stepNumber ?? index + 1,
               title: step.title || `단계 ${index + 1}`,
               description: step.description || "",
