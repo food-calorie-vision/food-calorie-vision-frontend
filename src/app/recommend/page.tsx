@@ -1170,27 +1170,22 @@ const [contextReady, setContextReady] = useState(false);
         return;
       }
       
-      // 실제 백엔드 API 호출
-      const res = await fetch(`${apiEndpoint}/api/v1/chat/`, {
+      // 식단 추천 전용 API 호출 (/api/v1/recommend/diet-plan)
+      const res = await fetch(`${apiEndpoint}/api/v1/recommend/diet-plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: 'include',
         body: JSON.stringify({ 
-          session_id: sessionId,
-          message: userText,
-          mode: "execute",
-          // context: {
-          //   current_tab: 'diet',
-          //   activity_level: "moderate" // TODO: 사용자가 선택하도록 개선
-          // }
+          user_request: userText,
+          activity_level: "moderate"  // TODO: 사용자가 선택하도록 개선
         }),
       });
 
       const result = await res.json();
 
-      if (result.response) {
+      if (result.success && result.data) {
         try {
-          const responseData: DietPlanApiResponse = JSON.parse(result.response);
+          const responseData: DietPlanApiResponse = result.data;
           
           // API 응답을 프론트엔드 형식으로 변환
           const rawDietPlans = Array.isArray(responseData.dietPlans) ? responseData.dietPlans : [];
@@ -1357,7 +1352,7 @@ const [contextReady, setContextReady] = useState(false);
       if (selectedDietPlan.meals.breakfast && selectedMeals.breakfast) {
         const details = useMealDetails ? selectedDietPlan.meal_details?.breakfast : null;
         meals.push({
-          food_name: `${selectedDietPlan.name} - 아침`,
+          food_name: `${selectedDietPlan.name}: ${selectedDietPlan.meals.breakfast}`,
           meal_type: 'breakfast',
           ingredients: selectedDietPlan.meals.breakfast.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
           calories: details?.calories || fallbackCaloriesPerMeal,
@@ -1372,7 +1367,7 @@ const [contextReady, setContextReady] = useState(false);
       if (selectedDietPlan.meals.lunch && selectedMeals.lunch) {
         const details = useMealDetails ? selectedDietPlan.meal_details?.lunch : null;
         meals.push({
-          food_name: `${selectedDietPlan.name} - 점심`,
+          food_name: `${selectedDietPlan.name}: ${selectedDietPlan.meals.lunch}`,
           meal_type: 'lunch',
           ingredients: selectedDietPlan.meals.lunch.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
           calories: details?.calories || fallbackCaloriesPerMeal,
@@ -1387,7 +1382,7 @@ const [contextReady, setContextReady] = useState(false);
       if (selectedDietPlan.meals.dinner && selectedMeals.dinner) {
         const details = useMealDetails ? selectedDietPlan.meal_details?.dinner : null;
         meals.push({
-          food_name: `${selectedDietPlan.name} - 저녁`,
+          food_name: `${selectedDietPlan.name}: ${selectedDietPlan.meals.dinner}`,
           meal_type: 'dinner',
           ingredients: selectedDietPlan.meals.dinner.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
           calories: details?.calories || fallbackCaloriesPerMeal,
@@ -1402,7 +1397,7 @@ const [contextReady, setContextReady] = useState(false);
       if (selectedDietPlan.meals.snack && selectedMeals.snack) {
         const details = useMealDetails ? selectedDietPlan.meal_details?.snack : null;
         meals.push({
-          food_name: `${selectedDietPlan.name} - 간식`,
+          food_name: `${selectedDietPlan.name}: ${selectedDietPlan.meals.snack}`,
           meal_type: 'snack',
           ingredients: selectedDietPlan.meals.snack.split(/[+,]/).map(s => s.trim()).filter(s => s.length > 0),
           calories: details?.calories || fallbackCaloriesPerMeal,
