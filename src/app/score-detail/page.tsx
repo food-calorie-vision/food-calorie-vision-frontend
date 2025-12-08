@@ -193,8 +193,8 @@ export default function ScoreDetailPage() {
         </div>
 
         {/* 전체 점수 요약 */}
-        <div className="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-xl mb-6 shadow-sm">
-          <div className="flex items-center justify-between">
+        <div className="bg-gradient-to-br from-green-50 to-green-100 p-7 rounded-xl mb-6 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between relative z-10">
             <div>
               <div className="flex items-center mb-2">
                 <h2 className="text-sm font-semibold text-slate-700">오늘의 종합 점수</h2>
@@ -212,9 +212,18 @@ export default function ScoreDetailPage() {
                 <span className="text-xl font-bold text-slate-400 ml-1">/100</span>
               </div>
             </div>
-            {scoreDetail.previousScore > 0 && (
-              <div className="text-right">
-                <div className={`flex items-center justify-end mb-1 ${
+            
+            {/* 그래프 이미지 및 증감 표시 */}
+            <div className="flex flex-col items-end gap-1">
+              {/* 그래프 이미지 (크기 확대) */}
+              <img 
+                src="/score_image.png" 
+                alt="Score Trend" 
+                className="w-35 h-auto object-contain mb-1 opacity-90"
+              />
+              
+              {scoreDetail.previousScore > 0 && (
+                <div className={`flex items-center justify-end ${
                   scoreDetail.scoreChange > 0 ? 'text-green-600' : 
                   scoreDetail.scoreChange < 0 ? 'text-red-600' : 
                   'text-slate-600'
@@ -229,10 +238,10 @@ export default function ScoreDetailPage() {
                   <span className="text-sm font-bold">
                     {scoreDetail.scoreChange > 0 ? '+' : ''}{scoreDetail.scoreChange}점
                   </span>
+                  <span className="text-xs text-slate-500 ml-1 font-normal">전날 대비</span>
                 </div>
-                <p className="text-xs text-slate-600">전날 대비</p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
