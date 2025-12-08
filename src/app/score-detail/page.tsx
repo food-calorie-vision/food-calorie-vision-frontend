@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, TrendingUp, TrendingDown, Target } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Target, Info } from 'lucide-react';
 import Link from 'next/link';
 import MobileHeader from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
@@ -79,6 +79,7 @@ export default function ScoreDetailPage() {
   const { isAuthenticated, userName, logout } = useSession();
   const [scoreDetail, setScoreDetail] = useState<ScoreDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showQuantityTooltip, setShowQuantityTooltip] = useState(false);
 
   useEffect(() => {
     const fetchScoreDetail = async () => {
@@ -257,9 +258,34 @@ export default function ScoreDetailPage() {
               </div>
 
               {/* 섭취 달성도 */}
-              <div>
+              <div className="relative">
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="font-semibold text-slate-700">🍽️ 섭취 달성도</span>
+                  <div className="flex items-center gap-1">
+                    <span className="font-semibold text-slate-700">🍽️ 섭취 달성도</span>
+                    <button 
+                      onClick={() => setShowQuantityTooltip(!showQuantityTooltip)}
+                      onMouseEnter={() => setShowQuantityTooltip(true)}
+                      onMouseLeave={() => setShowQuantityTooltip(false)}
+                      className="w-4 h-4 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center cursor-help focus:outline-none hover:bg-slate-200 hover:text-slate-700 transition-colors"
+                    >
+                      <Info className="w-3 h-3" />
+                    </button>
+                    
+                    {/* 툴팁 */}
+                    {showQuantityTooltip && (
+                      <div className="absolute left-0 bottom-full mb-2 w-64 bg-white border border-slate-200 text-slate-600 text-xs rounded-lg p-3 shadow-xl z-20">
+                        <p className="font-bold mb-1 text-slate-800">💡 점수 계산법</p>
+                        <p className="mb-2 text-slate-600">목표 칼로리의 <span className="text-emerald-600 font-bold">80% ~ 120%</span>를 섭취하면 만점(1.0)을 받습니다.</p>
+                        <ul className="space-y-1 text-slate-500 list-disc pl-3 bg-slate-50 rounded p-2 mb-2">
+                          <li>현재 섭취율: <span className="text-slate-700 font-bold">{scoreDetail.calorieRatio ?? 0}%</span></li>
+                          <li>현재 점수: <span className="text-slate-700 font-bold">{scoreDetail.quantityScore}점</span></li>
+                        </ul>
+                        <p className="text-[10px] text-slate-400">* 너무 적게 먹거나 과식하면 점수가 낮아집니다.</p>
+                        {/* 화살표 (흰색 배경에 맞게 수정) */}
+                        <div className="absolute left-6 top-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-white drop-shadow-sm"></div>
+                      </div>
+                    )}
+                  </div>
                   <span className="text-slate-900 font-bold">{scoreDetail.quantityScore}점</span>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2 mb-1">

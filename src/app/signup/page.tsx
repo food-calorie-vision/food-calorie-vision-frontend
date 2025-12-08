@@ -106,6 +106,24 @@ export default function SignupPage() {
   const [emailCheckMessage, setEmailCheckMessage] = useState('');
   const [emailChecking, setEmailChecking] = useState(false);
 
+  // 약관 동의 상태
+  const [agreements, setAgreements] = useState({
+    terms: false,
+    privacy: false,
+    sensitive: false,
+  });
+  const [openAgreementModal, setOpenAgreementModal] = useState<'terms' | 'privacy' | 'sensitive' | null>(null);
+
+  const handleAllCheck = (checked: boolean) => {
+    setAgreements({
+      terms: checked,
+      privacy: checked,
+      sensitive: checked,
+    });
+  };
+
+  const isAllAgreed = agreements.terms && agreements.privacy && agreements.sensitive;
+
   const [f, setF] = useState<SignupFormData>({
     password: '',
     confirmPassword: '',
@@ -570,6 +588,78 @@ export default function SignupPage() {
                   />
                 </Field>
               </div>
+
+              {/* 약관 동의 */}
+              <div className="pt-4 border-t border-slate-100 space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={isAllAgreed}
+                    onChange={(e) => handleAllCheck(e.target.checked)}
+                    className="w-5 h-5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <span className="font-bold text-slate-800">전체 동의하기</span>
+                </label>
+
+                <div className="space-y-2 px-1">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={agreements.terms}
+                        onChange={(e) => setAgreements((s) => ({ ...s, terms: e.target.checked }))}
+                        className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <span className="text-sm text-slate-600">[필수] 서비스 이용약관 동의</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setOpenAgreementModal('terms')}
+                      className="text-xs text-slate-400 underline hover:text-emerald-500"
+                    >
+                      내용보기
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={agreements.privacy}
+                        onChange={(e) => setAgreements((s) => ({ ...s, privacy: e.target.checked }))}
+                        className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <span className="text-sm text-slate-600">[필수] 개인정보 수집 및 이용 동의</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setOpenAgreementModal('privacy')}
+                      className="text-xs text-slate-400 underline hover:text-emerald-500"
+                    >
+                      내용보기
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={agreements.sensitive}
+                        onChange={(e) => setAgreements((s) => ({ ...s, sensitive: e.target.checked }))}
+                        className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <span className="text-sm text-slate-600">[필수] 민감정보 수집 및 이용 동의</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setOpenAgreementModal('sensitive')}
+                      className="text-xs text-slate-400 underline hover:text-emerald-500"
+                    >
+                      내용보기
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -605,10 +695,10 @@ export default function SignupPage() {
                 <button
                   type="button"
                   onClick={submit}
-                  disabled={pending}
+                  disabled={pending || !isAllAgreed}
                   className={`flex-1 rounded-xl py-3 font-bold shadow ${
-                    pending
-                      ? 'bg-emerald-300 text-white cursor-wait'
+                    pending || !isAllAgreed
+                      ? 'bg-slate-300 text-white cursor-not-allowed'
                       : 'bg-emerald-500 text-white hover:bg-emerald-600'
                   }`}
                 >
@@ -642,6 +732,90 @@ export default function SignupPage() {
               className="w-full rounded-xl bg-emerald-500 py-3 font-bold text-white hover:bg-emerald-600"
             >
               확인
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 약관 동의 모달 */}
+      {openAgreementModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="rounded-2xl bg-white p-6 shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
+            <h3 className="text-lg font-bold text-slate-900 mb-4">
+              {openAgreementModal === 'terms' && '서비스 이용약관'}
+              {openAgreementModal === 'privacy' && '개인정보 수집 및 이용 동의'}
+              {openAgreementModal === 'sensitive' && '민감정보 수집 및 이용 동의'}
+            </h3>
+            <div className="flex-1 overflow-y-auto text-sm text-slate-600 whitespace-pre-wrap border rounded-lg p-4 mb-4 bg-slate-50">
+              {openAgreementModal === 'terms' && `제1조 (목적)
+본 약관은 회사가 제공하는 건강 관리 및 식단 추천 서비스(이하 "서비스")의 이용조건 및 절차, 이용자와 회사의 권리, 의무, 책임사항을 규정함을 목적으로 합니다.
+
+제2조 (용어의 정의)
+1. "회원"이란 본 약관에 동의하고 회사가 제공하는 서비스를 이용하는 자를 말합니다.
+2. "서비스"란 회사가 제공하는 AI 기반 식단 분석, 추천 및 건강 리포트 기능을 말합니다.
+
+제3조 (약관의 효력 및 변경)
+1. 본 약관은 회원이 서비스 가입 시 동의함으로써 효력이 발생합니다.
+2. 회사는 관련 법령을 위배하지 않는 범위에서 약관을 개정할 수 있으며, 개정 시 공지사항을 통해 알립니다.
+
+제4조 (회원의 의무)
+1. 회원은 서비스 이용 시 본인의 정보를 사실대로 입력해야 합니다.
+2. 회원은 타인의 정보를 도용하거나 부정한 방법으로 서비스를 이용해서는 안 됩니다.
+3. 회원은 회사의 지적재산권을 침해하는 행위를 해서는 안 됩니다.
+
+제5조 (서비스의 제공 및 중단)
+1. 회사는 연중무휴 24시간 서비스를 제공함을 원칙으로 합니다.
+2. 단, 시스템 점검, 천재지변 등 불가피한 사유가 발생한 경우 서비스 제공을 일시 중단할 수 있습니다.
+
+제6조 (면책조항)
+회사가 제공하는 건강 및 영양 정보는 보조적인 수단이며, 전문적인 의료 행위를 대체하지 않습니다. 건강상의 문제가 있을 경우 반드시 의사 등 전문가와 상의해야 합니다.`}
+              {openAgreementModal === 'privacy' && `[개인정보 수집 및 이용 동의]
+
+회사는 다음과 같이 이용자의 개인정보를 수집 및 이용합니다.
+
+1. 수집하는 개인정보 항목
+- 필수항목: 이메일(ID), 비밀번호, 닉네임, 나이, 성별
+- 서비스 이용 과정에서 자동 수집: 접속 로그, 쿠키, 기기 정보
+
+2. 개인정보의 수집 및 이용목적
+- 회원 관리: 본인 확인, 개인 식별, 가입 의사 확인, 불만 처리
+- 서비스 제공: AI 기반 맞춤형 식단 추천, 영양 분석 리포트 생성
+- 신규 서비스 개발 및 마케팅: 통계학적 분석, 서비스 유효성 확인
+
+3. 개인정보의 보유 및 이용기간
+- 원칙적으로 회원 탈퇴 시까지 보유 및 이용합니다.
+- 단, 관련 법령에 의거하여 보존할 필요가 있는 경우 해당 기간 동안 보관합니다.
+  - 로그인 기록: 3개월 (통신비밀보호법)
+  - 소비자의 불만 또는 분쟁처리에 관한 기록: 3년 (전자상거래법)
+
+※ 귀하는 개인정보 수집 및 이용에 거부할 권리가 있으나, 거부 시 회원가입 및 서비스 이용이 제한될 수 있습니다.`}
+              {openAgreementModal === 'sensitive' && `[민감정보 수집 및 이용 동의]
+
+회사는 개인 맞춤형 건강 관리 서비스를 제공하기 위해 다음과 같은 민감정보를 수집 및 이용합니다.
+
+1. 수집하는 민감정보 항목
+- 신체 정보: 키, 몸무게, BMI 지수
+- 건강 정보: 알레르기 유무 및 유발 식품명, 기저질환 정보, 구체적 건강 목표(감량/유지/증량 등)
+- 식습관 정보: 일일 섭취 음식 기록, 영양소 섭취 현황
+
+2. 민감정보의 수집 및 이용목적
+- 개인 맞춤형 권장 칼로리(TDEE) 및 영양소 비율 계산
+- AI 기반 식단 추천 알고리즘의 정확도 향상
+- 알레르기 유발 식재료 필터링 및 경고 기능 제공
+- 주간/월간 건강 리포트 생성 및 추이 분석
+
+3. 보유 및 이용기간
+- 회원 탈퇴 시 즉시 파기하거나, 법령에 따른 보유 기간 동안 안전하게 보관 후 파기합니다.
+
+4. 동의 거부 권리 및 불이익
+- 귀하는 민감정보 수집 및 이용에 대한 동의를 거부할 수 있습니다.
+- 단, 동의를 거부할 경우 본 서비스의 핵심 기능인 '맞춤형 식단 추천', '알레르기 경고', '건강 리포트' 등의 이용이 불가능하거나 제한될 수 있습니다.`}
+            </div>
+            <button
+              onClick={() => setOpenAgreementModal(null)}
+              className="w-full rounded-xl bg-slate-200 py-3 font-bold text-slate-700 hover:bg-slate-300"
+            >
+              닫기
             </button>
           </div>
         </div>
