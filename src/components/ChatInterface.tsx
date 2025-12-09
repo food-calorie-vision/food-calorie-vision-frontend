@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Paperclip, Send, Image as ImageIcon, X, Loader2 } from 'lucide-react';
 import { ChatMessage, MealRecommendation } from '@/types';
+import { API_BASE_URL } from '@/utils/api';
 
 interface ChatInterfaceProps {
   selectedMeal: MealRecommendation | null;
@@ -54,31 +55,47 @@ export default function ChatInterface({ selectedMeal }: ChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      // 실제 API 호출
-      const response = await fetch('/api/chat', {
+      // 실제 API 호출 (백엔드 직접 호출)
+      const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        // credentials: 'include', // 필요 시 추가 (쿠키 인증 사용 시)
         body: JSON.stringify({
+          // 백엔드 스키마(ChatMessageRequest)에 맞춰 필드 매핑 필요
+          session_id: "test-session", // 임시 세션 ID (실제로는 생성/관리 필요)
           message: currentMessage,
-          selectedMeal,
-          imageData: attachedFiles.length > 0 ? await fileToBase64(attachedFiles[0]) : null
+          mode: "execute", // or "clarify"
+          // selectedMeal, imageData 등은 백엔드 스키마 확인 후 추가 구현 필요
         }),
       });
 
       const result = await response.json();
 
-      if (result.success) {
+      // 백엔드 응답 구조(ChatMessageResponse)에 맞춰 파싱
+      // result: { session_id, response, needs_tool_call }
+      // response는 JSON 문자열일 수 있으므로 파싱 필요
+      
+      let botContent = "응답을 받지 못했습니다.";
+      
+      if (response.ok) {
+        try {
+            const parsedResponse = JSON.parse(result.response);
+            botContent = parsedResponse.message || "응답 내용이 없습니다.";
+        } catch (e) {
+            botContent = result.response || "응답 처리 중 오류가 발생했습니다.";
+        }
+
         const botResponse: ChatMessage = {
           id: (Date.now() + 1).toString(),
           type: 'bot',
-          content: result.data.message,
+          content: botContent,
           timestamp: new Date()
         };
         setMessages(prev => [...prev, botResponse]);
       } else {
-        throw new Error(result.error || 'API 호출 실패');
+        throw new Error(result.detail || 'API 호출 실패');
       }
     } catch (error) {
       console.error('Chat API error:', error);
