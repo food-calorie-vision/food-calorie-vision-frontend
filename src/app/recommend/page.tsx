@@ -111,6 +111,7 @@ type RecipeDetail = {
     fiber?: string;
     sodium?: string;
   };
+  total_weight_g?: number;
 };
 
 type DietPlan = {
@@ -965,7 +966,8 @@ const [contextReady, setContextReady] = useState(false);
             fat: nutrition.fat,
             fiber: nutrition.fiber,
             sodium: nutrition.sodium
-          }
+          },
+          total_weight_g: customData.total_weight_g
         });
         setRecipeIntro(customData.intro || "");
         setCookingMarkdown(customData.instructions_markdown || "");
@@ -1052,12 +1054,12 @@ const [contextReady, setContextReady] = useState(false);
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({
-          recipe_name: selectedRecipe.name,
-          actual_servings: 1.0,  // TODO: 사용자가 입력하도록 개선
-          meal_type: selectedMealType || 'lunch',  // ✨ 사용자가 선택한 식사 유형 사용
-          nutrition_info: {
-            calories: recipeDetail.nutrition_info.calories,
+                    body: JSON.stringify({
+                      recipe_name: selectedRecipe.name,
+                      actual_servings: 1.0,  // TODO: 사용자가 입력하도록 개선
+                      portion_size_g: recipeDetail.total_weight_g || 250.0,
+                      meal_type: selectedMealType || 'lunch',  // ✨ 사용자가 선택한 식사 유형 사용
+                      nutrition_info: {            calories: recipeDetail.nutrition_info.calories,
             protein: recipeDetail.nutrition_info.protein,
             carbs: recipeDetail.nutrition_info.carbs,
             fat: recipeDetail.nutrition_info.fat,
